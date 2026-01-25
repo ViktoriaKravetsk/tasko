@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:15
+    container_name: tasko-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tasko_db
+      POSTGRES_USER: tasko
+      POSTGRES_PASSWORD: tasko
+    ports:
+      - "5434:5432"
+    volumes:
+      - tasko_db_data:/var/lib/postgresql/data
+
+volumes:
+  tasko_db_data:

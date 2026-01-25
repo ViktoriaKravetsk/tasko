@@ -1,0 +1,216 @@
+### ====== TASKO API TESTS (IntelliJ HTTP Client) ======
+@baseUrl = http://localhost:8083
+@ownerId = 1
+@studentId = 2
+@student2Id = 3
+
+### 0) Health (optional)
+GET {{baseUrl}}/actuator/health
+
+### 1) My projects (owner=1) —
+GET {{baseUrl}}/api/projects/my
+X-USER-ID: {{ownerId}}
+
+### 2) Create project (owner=1) — з відповіді автоматично збережемо joinCode та projectId
+POST {{baseUrl}}/api/projects
+Content-Type: application/json
+X-USER-ID: {{ownerId}}
+
+{
+  "name": "Demo Project",
+  "description": "for tasks tests",
+  "deadline": "2026-02-01"
+}
+
+> {%
+    client.global.set("joinCode", response.body.joinCode);
+    client.global.set("projectId", response.body.id);
+%}
+
+### 3) My projects after create (owner=1)
+GET {{baseUrl}}/api/projects/my
+X-USER-ID: {{ownerId}}
+
+### 4) Enrolled projects before join (student=2) — має бути []
+GET {{baseUrl}}/api/projects/enrolled
+X-USER-ID: {{studentId}}
+
+### 5) Join by code (student=2) — ВАЖЛИВО: використовуємо {{joinCode}}, не вставляємо руками
+POST {{baseUrl}}/api/projects/join
+Content-Type: application/json
+X-USER-ID: {{studentId}}
+
+{
+  "joinCode": "{{joinCode}}"
+}
+
+### 6) Enrolled projects after join (student=2) — має містити проєкт
+GET {{baseUrl}}/api/projects/enrolled
+X-USER-ID: {{studentId}}
+
+### 7) Join same project again (student=2) — має бути ok (idempotent), без дубля
+POST {{baseUrl}}/api/projects/join
+Content-Type: application/json
+X-USER-ID: {{studentId}}
+
+{
+  "joinCode": "{{joinCode}}"
+}
+
+### 8) Enrolled projects after double join (student=2) — все ще 1 запис
+GET {{baseUrl}}/api/projects/enrolled
+X-USER-ID: {{studentId}}
+
+### 9) Join with wrong code (student=2) — має бути 404/400, але не 500
+POST {{baseUrl}}/api/projects/join
+Content-Type: application/json
+X-USER-ID: {{studentId}}
+
+{
+  "joinCode": "WRONG123"
+}
+
+### 10) Enrolled projects before join (student=3) — має бути []
+GET {{baseUrl}}/api/projects/enrolled
+X-USER-ID: {{student2Id}}
+
+### 11) Join by code (student=3)
+POST {{baseUrl}}/api/projects/join
+Content-Type: application/json
+X-USER-ID: {{student2Id}}
+
+{
+  "joinCode": "{{joinCode}}"
+}
+
+### 12) Enrolled projects after join (student=3) — має містити проєкт
+GET {{baseUrl}}/api/projects/enrolled
+X-USER-ID: {{student2Id}}
+
+### 13) Owner tries to join own project by code — має бути ok і без дубля
+POST {{baseUrl}}/api/projects/join
+Content-Type: application/json
+X-USER-ID: {{ownerId}}
+
+{
+  "joinCode": "{{joinCode}}"
+}
+
+
+### ============================
+### TASKS
+### Base URL: /api/projects/{projectId}/tasks
+### projectId вже є у {{projectId}} з Create project
+### ============================
+
+### 14) List tasks (owner=1) — спочатку []
+GET {{baseUrl}}/api/projects/{{projectId}}/tasks
+X-USER-ID: {{ownerId}}
+
+### 15) Create task (owner=1) — збережемо taskId з відповіді
+POST {{baseUrl}}/api/projects/{{projectId}}/tasks
+Content-Type: application/json
+X-USER-ID: {{ownerId}}
+
+{
+  "title": "Task 1",
+  "description": "First task",
+  "deadline": "2026-02-10",
+  "maxScore": 100
+}
+
+> {%
+    client.global.set("taskId", response.body.id);
+%}
+
+### 16) Create task без title (owner=1) — має впасти (краще 400)
+POST {{baseUrl}}/api/projects/{{projectId}}/tasks
+Content-Type: application/json
+X-USER-ID: {{ownerId}}
+
+{
+  "title": "   ",
+  "description": "no title",
+  "deadline": "2026-02-10",
+  "maxScore": 100
+}
+
+### 17) List tasks (student=2) — має бачити задачі (бо учасник)
+GET {{baseUrl}}/api/projects/{{projectId}}/tasks
+X-USER-ID: {{studentId}}
+
+### 18) Get task by id (student=2)
+GET {{baseUrl}}/api/projects/{{projectId}}/tasks/{{taskId}}
+X-USER-ID: {{studentId}}
+
+### 19) Update task (owner=1) — змінити title/description/deadline/maxScore
+PUT {{baseUrl}}/api/projects/{{projectId}}/tasks/{{taskId}}
+Content-Type: application/json
+X-USER-ID: {{ownerId}}
+
+{
+  "title": "Task 1 (updated)",
+  "description": "Updated description",
+  "deadline": "2026-02-15",
+  "maxScore": 80
+}
+
+### 20) Update тільки maxScore (owner=1) — якщо дозволяєш partial update через null
+PUT {{baseUrl}}/api/projects/{{projectId}}/tasks/{{taskId}}
+Content-Type: application/json
+X-USER-ID: {{ownerId}}
+
+{
+  "maxScore": 60
+}
+
+### 21) Update status (owner=1) — TODO/IN_PROGRESS/DONE (як у твоєму enum)
+PATCH {{baseUrl}}/api/projects/{{projectId}}/tasks/{{taskId}}/status
+Content-Type: application/json
+X-USER-ID: {{ownerId}}
+
+{
+  "status": "IN_PROGRESS"
+}
+
+### 22) Update status як student=2 — має впасти (бо тільки OWNER)
+PATCH {{baseUrl}}/api/projects/{{projectId}}/tasks/{{taskId}}/status
+Content-Type: application/json
+X-USER-ID: {{studentId}}
+
+{
+  "status": "DONE"
+}
+
+### 23) Delete task (owner=1) — має бути 200/204
+DELETE {{baseUrl}}/api/projects/{{projectId}}/tasks/{{taskId}}
+X-USER-ID: {{ownerId}}
+
+### 24) Get deleted task — має бути 404
+GET {{baseUrl}}/api/projects/{{projectId}}/tasks/{{taskId}}
+X-USER-ID: {{ownerId}}
+
+### 25) List tasks після delete — має бути []
+GET {{baseUrl}}/api/projects/{{projectId}}/tasks
+X-USER-ID: {{ownerId}}
+
+
+### ============================
+### NEGATIVE TESTS (membership/role)
+### ============================
+
+### 26) List tasks неучасником (userId=999) — має впасти (403/404)
+GET {{baseUrl}}/api/projects/{{projectId}}/tasks
+X-USER-ID: 999
+
+### 27) Create task студентом (userId=2) — має впасти (Only OWNER)
+POST {{baseUrl}}/api/projects/{{projectId}}/tasks
+Content-Type: application/json
+X-USER-ID: {{studentId}}
+
+{
+  "title": "Student tries create",
+  "description": "should fail",
+  "deadline": "2026-02-10",
+  "maxScore": 10
+}
