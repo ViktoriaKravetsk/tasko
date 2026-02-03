@@ -37,12 +37,9 @@ public class ProjectService {
                 .joinCode(code)
                 .joinEnabled(true)
                 .active(true)
-                // важливо: навіть якщо @PrePersist у Entity випадково зламаний — БД не отримає null
                 .createdAt(Instant.now())
                 .build());
 
-        // owner стає учасником проєкту
-        // (якщо вже є - завдяки uq_project_member буде помилка, але в create це зазвичай перший запис)
         memberRepository.save(ProjectMember.builder()
                 .projectId(saved.getId())
                 .userId(ownerId)

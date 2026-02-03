@@ -95,7 +95,6 @@ public class TaskService {
         taskRepository.delete(task);
     }
 
-    // ---- helpers ----
 
     private void requireMember(Long projectId, Long userId) {
         if (!memberRepository.existsByProjectIdAndUserId(projectId, userId)) {

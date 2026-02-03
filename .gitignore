@@ -35,3 +35,7 @@ out/
 
 ### VS Code ###
 .vscode/
+# local leftover React files
+frontend/src/App.jsx
+frontend/src/main.jsx
+frontend/vite.config.js

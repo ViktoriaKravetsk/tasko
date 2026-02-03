@@ -11,13 +11,11 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
 
     List<ProjectMember> findAllByUserId(Long userId);
 
-    // корисно для перевірки доступу/ролі в проєкті
     Optional<ProjectMember> findByProjectIdAndUserId(Long projectId, Long userId);
 
-    // список учасників проєкту (для сторінки учасників / призначення завдань)
     List<ProjectMember> findAllByProjectId(Long projectId);
 
-    // якщо треба швидко отримати ids усіх проєктів, де користувач є учасником
     List<ProjectMember> findAllByUserIdAndRole(Long userId, ProjectRole role);
+
     void deleteByProjectIdAndUserId(Long projectId, Long userId);
 }

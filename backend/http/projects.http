@@ -97,11 +97,6 @@ X-USER-ID: {{ownerId}}
 }
 
 
-### ============================
-### TASKS
-### Base URL: /api/projects/{projectId}/tasks
-### projectId вже є у {{projectId}} з Create project
-### ============================
 
 ### 14) List tasks (owner=1) — спочатку []
 GET {{baseUrl}}/api/projects/{{projectId}}/tasks
@@ -186,7 +181,7 @@ X-USER-ID: {{studentId}}
 DELETE {{baseUrl}}/api/projects/{{projectId}}/tasks/{{taskId}}
 X-USER-ID: {{ownerId}}
 
-### 24) Get deleted task — має бути 404
+### 24) Get deleted task
 GET {{baseUrl}}/api/projects/{{projectId}}/tasks/{{taskId}}
 X-USER-ID: {{ownerId}}
 
@@ -195,11 +190,8 @@ GET {{baseUrl}}/api/projects/{{projectId}}/tasks
 X-USER-ID: {{ownerId}}
 
 
-### ============================
-### NEGATIVE TESTS (membership/role)
-### ============================
 
-### 26) List tasks неучасником (userId=999) — має впасти (403/404)
+### 26) List tasks неучасником (userId=999) — має впасти
 GET {{baseUrl}}/api/projects/{{projectId}}/tasks
 X-USER-ID: 999
 
