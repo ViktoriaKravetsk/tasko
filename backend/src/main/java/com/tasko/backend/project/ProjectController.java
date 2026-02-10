@@ -1,7 +1,9 @@
 package com.tasko.backend.project;
 
+import com.tasko.backend.CurrentUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,24 +16,24 @@ public class ProjectController {
     private final ProjectService projectService;
 
     @PostMapping
-    public ProjectResponse create(@RequestHeader("X-USER-ID") Long userId,
+    public ProjectResponse create(@AuthenticationPrincipal CurrentUser principal,
                                   @Valid @RequestBody ProjectCreateRequest req) {
-        return projectService.create(userId, req);
+        return projectService.create(principal.getUserId(), req);
     }
 
     @GetMapping("/my")
-    public List<ProjectResponse> my(@RequestHeader("X-USER-ID") Long userId) {
-        return projectService.listMy(userId);
+    public List<ProjectResponse> my(@AuthenticationPrincipal CurrentUser principal) {
+        return projectService.listMy(principal.getUserId());
     }
 
     @PostMapping("/join")
-    public ProjectResponse join(@RequestHeader("X-USER-ID") Long userId,
+    public ProjectResponse join(@AuthenticationPrincipal CurrentUser principal,
                                 @Valid @RequestBody ProjectJoinRequest req) {
-        return projectService.joinByCode(userId, req.joinCode());
+        return projectService.joinByCode(principal.getUserId(), req.joinCode());
     }
 
     @GetMapping("/enrolled")
-    public List<ProjectResponse> enrolled(@RequestHeader("X-USER-ID") Long userId) {
-        return projectService.listEnrolled(userId);
+    public List<ProjectResponse> enrolled(@AuthenticationPrincipal CurrentUser principal) {
+        return projectService.listEnrolled(principal.getUserId());
     }
 }

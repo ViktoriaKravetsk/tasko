@@ -1,6 +1,9 @@
 package com.tasko.backend.task;
 
+import com.tasko.backend.CurrentUser;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,56 +17,56 @@ public class TaskController {
 
     @PostMapping
     public TaskResponse create(
-            @RequestHeader("X-USER-ID") Long userId,
+            @AuthenticationPrincipal CurrentUser principal,
             @PathVariable Long projectId,
-            @RequestBody TaskCreateRequest req
+            @Valid @RequestBody TaskCreateRequest req
     ) {
-        return taskService.create(userId, projectId, req);
+        return taskService.create(principal.getUserId(), projectId, req);
     }
 
     @GetMapping
     public List<TaskShortResponse> list(
-            @RequestHeader("X-USER-ID") Long userId,
+            @AuthenticationPrincipal CurrentUser principal,
             @PathVariable Long projectId
     ) {
-        return taskService.list(userId, projectId);
+        return taskService.list(principal.getUserId(), projectId);
     }
 
     @GetMapping("/{taskId}")
     public TaskResponse getById(
-            @RequestHeader("X-USER-ID") Long userId,
+            @AuthenticationPrincipal CurrentUser principal,
             @PathVariable Long projectId,
             @PathVariable Long taskId
     ) {
-        return taskService.getById(userId, projectId, taskId);
+        return taskService.getById(principal.getUserId(), projectId, taskId);
     }
 
     @PutMapping("/{taskId}")
     public TaskResponse update(
-            @RequestHeader("X-USER-ID") Long userId,
+            @AuthenticationPrincipal CurrentUser principal,
             @PathVariable Long projectId,
             @PathVariable Long taskId,
-            @RequestBody TaskUpdateRequest req
+            @Valid @RequestBody TaskUpdateRequest req
     ) {
-        return taskService.update(userId, projectId, taskId, req);
+        return taskService.update(principal.getUserId(), projectId, taskId, req);
     }
 
     @PatchMapping("/{taskId}/status")
     public TaskResponse updateStatus(
-            @RequestHeader("X-USER-ID") Long userId,
+            @AuthenticationPrincipal CurrentUser principal,
             @PathVariable Long projectId,
             @PathVariable Long taskId,
-            @RequestBody TaskStatusUpdateRequest req
+            @Valid @RequestBody TaskStatusUpdateRequest req
     ) {
-        return taskService.updateStatus(userId, projectId, taskId, req);
+        return taskService.updateStatus(principal.getUserId(), projectId, taskId, req);
     }
 
     @DeleteMapping("/{taskId}")
     public void delete(
-            @RequestHeader("X-USER-ID") Long userId,
+            @AuthenticationPrincipal CurrentUser principal,
             @PathVariable Long projectId,
             @PathVariable Long taskId
     ) {
-        taskService.delete(userId, projectId, taskId);
+        taskService.delete(principal.getUserId(), projectId, taskId);
     }
 }

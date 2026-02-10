@@ -2,6 +2,8 @@ package com.tasko.backend.project;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -36,13 +38,26 @@ public class Project {
     @Column(nullable = false)
     private boolean active = true;
 
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
     @PrePersist
-    void prePersist() {
-        if (createdAt == null) createdAt = Instant.now();
+    void prePersist() { normalize(); }
+
+    @PreUpdate
+    void preUpdate() { normalize(); }
+
+    private void normalize() {
         if (joinCode != null) joinCode = joinCode.trim().toUpperCase();
         if (name != null) name = name.trim();
+        if (description != null) {
+            String d = description.trim();
+            description = d.isBlank() ? null : d;
+        }
     }
 }
