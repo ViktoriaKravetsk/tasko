@@ -1,13 +1,12 @@
 package com.tasko.backend.task;
 
+import com.tasko.backend.exception.*;
 import com.tasko.backend.project.ProjectMember;
 import com.tasko.backend.project.ProjectMemberRepository;
 import com.tasko.backend.project.ProjectRole;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Objects;
@@ -23,9 +22,7 @@ public class TaskService {
     public TaskResponse create(Long userId, Long projectId, TaskCreateRequest req) {
         requireOwner(projectId, userId);
 
-        if (req == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request is required");
-        }
+        if (req == null) throw new BadRequestException("Request is required");
 
         String title = normalizeRequired(req.title(), "Title is required");
 
@@ -56,7 +53,7 @@ public class TaskService {
         requireMember(projectId, userId);
 
         Task task = taskRepository.findByIdAndProjectId(taskId, projectId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+                .orElseThrow(() -> new NotFoundException("Task not found"));
 
         return toResponse(task);
     }
@@ -65,12 +62,10 @@ public class TaskService {
     public TaskResponse update(Long userId, Long projectId, Long taskId, TaskUpdateRequest req) {
         requireOwner(projectId, userId);
 
-        if (req == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request is required");
-        }
+        if (req == null) throw new BadRequestException("Request is required");
 
         Task task = taskRepository.findByIdAndProjectId(taskId, projectId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+                .orElseThrow(() -> new NotFoundException("Task not found"));
 
         if (req.title() != null) task.setTitle(normalizeRequired(req.title(), "Title is required"));
         if (req.description() != null) task.setDescription(normalizeNullable(req.description()));
@@ -84,12 +79,10 @@ public class TaskService {
     public TaskResponse updateStatus(Long userId, Long projectId, Long taskId, TaskStatusUpdateRequest req) {
         requireOwner(projectId, userId);
 
-        if (req == null || req.status() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required");
-        }
+        if (req == null || req.status() == null) throw new BadRequestException("Status is required");
 
         Task task = taskRepository.findByIdAndProjectId(taskId, projectId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+                .orElseThrow(() -> new NotFoundException("Task not found"));
 
         task.setStatus(req.status());
 
@@ -101,44 +94,35 @@ public class TaskService {
         requireOwner(projectId, userId);
 
         Task task = taskRepository.findByIdAndProjectId(taskId, projectId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+                .orElseThrow(() -> new NotFoundException("Task not found"));
 
         taskRepository.delete(task);
     }
 
     private void requireMember(Long projectId, Long userId) {
-        if (userId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-        }
-        if (projectId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "projectId is required");
-        }
+        if (userId == null) throw new UnauthenticatedException();
+        if (projectId == null) throw new BadRequestException("projectId is required");
+
         if (!memberRepository.existsByProjectIdAndUserId(projectId, userId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not a project member");
+            throw new ForbiddenException("Not a project member");
         }
     }
 
     private void requireOwner(Long projectId, Long userId) {
-        if (userId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-        }
-        if (projectId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "projectId is required");
-        }
+        if (userId == null) throw new UnauthenticatedException();
+        if (projectId == null) throw new BadRequestException("projectId is required");
 
         ProjectMember membership = memberRepository.findByProjectIdAndUserId(projectId, userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Not a project member"));
+                .orElseThrow(() -> new ForbiddenException("Not a project member"));
 
         if (membership.getRole() != ProjectRole.OWNER) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only OWNER can do this");
+            throw new ForbiddenException("Only OWNER can do this");
         }
     }
 
     private String normalizeRequired(String value, String msg) {
         String v = Objects.requireNonNullElse(value, "").trim();
-        if (v.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, msg);
-        }
+        if (v.isBlank()) throw new BadRequestException(msg);
         return v;
     }
 

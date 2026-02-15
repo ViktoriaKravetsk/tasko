@@ -1,4 +1,4 @@
-package com.tasko.backend.security;
+package com.tasko.backend;
 
 import com.tasko.backend.user.User;
 import com.tasko.backend.user.UserService;
@@ -14,14 +14,12 @@ import org.springframework.stereotype.Service;
 public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequest, OAuth2User> {
 
     private final UserService userService;
-
     private final DefaultOAuth2UserService delegate = new DefaultOAuth2UserService();
 
     @Override
     public OAuth2User loadUser(OAuth2UserRequest userRequest) {
         OAuth2User oauthUser = delegate.loadUser(userRequest);
         User user = userService.getOrCreateFromGoogle(oauthUser);
-
-        return new com.tasko.backend.CurrentUser(user.getId(), oauthUser);
+        return new CurrentUser(user.getId(), oauthUser);
     }
 }

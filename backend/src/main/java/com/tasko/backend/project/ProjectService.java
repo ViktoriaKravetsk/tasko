@@ -1,12 +1,11 @@
 package com.tasko.backend.project;
 
+import com.tasko.backend.exception.*;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Objects;
@@ -22,10 +21,8 @@ public class ProjectService {
 
     @Transactional
     public ProjectResponse create(Long ownerId, ProjectCreateRequest req) {
-        requireAuthenticated(ownerId);
-
         if (req == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request is required");
+            throw new BadRequestException("Request is required");
         }
 
         String name = trimRequired(req.name(), "name is required");
@@ -42,6 +39,7 @@ public class ProjectService {
                 .joinEnabled(true)
                 .active(true)
                 .build());
+
         memberRepository.save(ProjectMember.builder()
                 .projectId(saved.getId())
                 .userId(ownerId)
@@ -53,8 +51,6 @@ public class ProjectService {
 
     @Transactional(readOnly = true)
     public List<ProjectResponse> listMy(Long ownerId) {
-        requireAuthenticated(ownerId);
-
         return projectRepository.findByOwnerIdOrderByCreatedAtDesc(ownerId)
                 .stream()
                 .map(this::toResponse)
@@ -63,19 +59,18 @@ public class ProjectService {
 
     @Transactional
     public ProjectResponse joinByCode(Long userId, String joinCode) {
-        requireAuthenticated(userId);
-
         String code = trimRequired(joinCode, "joinCode is required").toUpperCase();
 
         Project project = projectRepository.findByJoinCode(code)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
+                .orElseThrow(() -> new NotFoundException("Project not found"));
 
         if (!project.isActive()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Project is inactive");
+            throw new ForbiddenException("Project is inactive");
         }
         if (!project.isJoinEnabled()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Join disabled");
+            throw new ForbiddenException("Join disabled");
         }
+
         if (memberRepository.existsByProjectIdAndUserId(project.getId(), userId)) {
             return toResponse(project);
         }
@@ -87,6 +82,7 @@ public class ProjectService {
                     .role(ProjectRole.STUDENT)
                     .build());
         } catch (DataIntegrityViolationException e) {
+            return toResponse(project);
         }
 
         return toResponse(project);
@@ -94,8 +90,6 @@ public class ProjectService {
 
     @Transactional(readOnly = true)
     public List<ProjectResponse> listEnrolled(Long userId) {
-        requireAuthenticated(userId);
-
         List<Long> projectIds = memberRepository.findAllByUserId(userId).stream()
                 .filter(m -> m.getRole() == ProjectRole.STUDENT)
                 .map(ProjectMember::getProjectId)
@@ -110,16 +104,10 @@ public class ProjectService {
                 .toList();
     }
 
-    private void requireAuthenticated(Long userId) {
-        if (userId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-        }
-    }
-
     private String trimRequired(String value, String msg) {
         String v = Objects.requireNonNullElse(value, "").trim();
         if (v.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, msg);
+            throw new BadRequestException(msg);
         }
         return v;
     }
@@ -137,10 +125,7 @@ public class ProjectService {
                 return candidate;
             }
         }
-        throw new ResponseStatusException(
-                HttpStatus.INTERNAL_SERVER_ERROR,
-                "Cannot generate unique join code"
-        );
+        throw new InternalException("Cannot generate unique join code");
     }
 
     private ProjectResponse toResponse(Project p) {

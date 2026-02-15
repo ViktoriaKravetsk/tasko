@@ -3,6 +3,7 @@ package com.tasko.backend.task;
 import com.tasko.backend.CurrentUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,6 +12,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/projects/{projectId}/tasks")
+@PreAuthorize("isAuthenticated()")
 public class TaskController {
 
     private final TaskService taskService;

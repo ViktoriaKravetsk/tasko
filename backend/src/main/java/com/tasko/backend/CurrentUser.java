@@ -32,6 +32,7 @@ public class CurrentUser implements OAuth2User {
 
     @Override
     public String getName() {
-        return delegate.getName();
+        Object sub = delegate.getAttribute("sub");
+        return sub != null ? String.valueOf(sub) : delegate.getName();
     }
 }
