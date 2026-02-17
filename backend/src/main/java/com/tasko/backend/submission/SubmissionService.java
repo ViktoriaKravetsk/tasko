@@ -1,0 +1,155 @@
+package com.tasko.backend.submission;
+
+import com.tasko.backend.exception.BadRequestException;
+import com.tasko.backend.exception.ForbiddenException;
+import com.tasko.backend.exception.NotFoundException;
+import com.tasko.backend.project.ProjectMember;
+import com.tasko.backend.project.ProjectMemberRepository;
+import com.tasko.backend.project.ProjectRole;
+import com.tasko.backend.task.Task;
+import com.tasko.backend.task.TaskRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class SubmissionService {
+
+    private final SubmissionRepository submissionRepository;
+    private final TaskRepository taskRepository;
+    private final ProjectMemberRepository memberRepository;
+
+    @Transactional
+    public SubmissionResponse upsertMy(Long userId, Long projectId, Long taskId, SubmissionUpsertRequest req) {
+        requireStudent(projectId, userId);
+
+        if (req == null) {
+            throw new BadRequestException("Request is required");
+        }
+
+        Task task = taskRepository.findByIdAndProjectId(taskId, projectId)
+                .orElseThrow(() -> new NotFoundException("Task not found"));
+
+        String text = trimToNull(req.textAnswer());
+        String link = trimToNull(req.fileLink());
+
+        if (text == null && link == null) {
+            throw new BadRequestException("Either textAnswer or fileLink is required");
+        }
+
+        boolean late = computeLate(task);
+
+        Instant now = Instant.now();
+
+        Submission submission = submissionRepository.findByTaskIdAndStudentId(taskId, userId)
+                .map(existing -> {
+                    existing.setTextAnswer(text);
+                    existing.setFileLink(link);
+                    existing.setSubmittedAt(now);
+                    existing.setLate(late);
+                    return existing;
+                })
+                .orElseGet(() -> Submission.builder()
+                        .taskId(taskId)
+                        .studentId(userId)
+                        .textAnswer(text)
+                        .fileLink(link)
+                        .submittedAt(now)
+                        .late(late)
+                        .build());
+
+        Submission saved = submissionRepository.save(submission);
+        return toResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public SubmissionResponse getMy(Long userId, Long projectId, Long taskId) {
+        requireStudent(projectId, userId);
+
+        taskRepository.findByIdAndProjectId(taskId, projectId)
+                .orElseThrow(() -> new NotFoundException("Task not found"));
+
+        Submission submission = submissionRepository.findByTaskIdAndStudentId(taskId, userId)
+                .orElseThrow(() -> new NotFoundException("Submission not found"));
+
+        return toResponse(submission);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SubmissionShortResponse> listForOwner(Long userId, Long projectId, Long taskId) {
+        requireOwner(projectId, userId);
+
+        taskRepository.findByIdAndProjectId(taskId, projectId)
+                .orElseThrow(() -> new NotFoundException("Task not found"));
+
+        return submissionRepository.findAllByTaskIdOrderBySubmittedAtDesc(taskId)
+                .stream()
+                .map(this::toShort)
+                .toList();
+    }
+
+    private void requireStudent(Long projectId, Long userId) {
+        ProjectMember m = memberRepository.findByProjectIdAndUserId(projectId, userId)
+                .orElseThrow(() -> new ForbiddenException("Not a project member"));
+
+        if (m.getRole() != ProjectRole.STUDENT) {
+            throw new ForbiddenException("Only STUDENT can do this");
+        }
+    }
+
+    private void requireOwner(Long projectId, Long userId) {
+        ProjectMember m = memberRepository.findByProjectIdAndUserId(projectId, userId)
+                .orElseThrow(() -> new ForbiddenException("Not a project member"));
+
+        if (m.getRole() != ProjectRole.OWNER) {
+            throw new ForbiddenException("Only OWNER can do this");
+        }
+    }
+
+    private boolean computeLate(Task task) {
+        LocalDate deadline = task.getDeadline();
+        return deadline != null && LocalDate.now().isAfter(deadline);
+
+    }
+
+    private String trimToNull(String s) {
+        if (s == null) return null;
+        String v = s.trim();
+        return v.isBlank() ? null : v;
+    }
+
+    private SubmissionResponse toResponse(Submission s) {
+        return new SubmissionResponse(
+                s.getId(),
+                s.getTaskId(),
+                s.getStudentId(),
+                s.getTextAnswer(),
+                s.getFileLink(),
+                s.getSubmittedAt(),
+                s.isLate(),
+                s.getTeacherScore(),
+                s.getTeacherComment(),
+                s.getGradedAt(),
+                s.getAiScore(),
+                s.getAiComment(),
+                s.getAiEvaluatedAt()
+        );
+    }
+
+    private SubmissionShortResponse toShort(Submission s) {
+        return new SubmissionShortResponse(
+                s.getId(),
+                s.getTaskId(),
+                s.getStudentId(),
+                s.getSubmittedAt(),
+                s.isLate(),
+                s.getTeacherScore(),
+                s.getGradedAt()
+        );
+    }
+}
