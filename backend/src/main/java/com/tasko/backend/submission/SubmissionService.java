@@ -80,6 +80,36 @@ public class SubmissionService {
         return toResponse(submission);
     }
 
+    @Transactional
+    public SubmissionResponse grade(Long userId, Long projectId, Long taskId, Long submissionId, SubmissionGradeRequest req) {
+        requireOwner(projectId, userId);
+
+        if (req == null) throw new BadRequestException("Request is required");
+
+        Task task = taskRepository.findByIdAndProjectId(taskId, projectId)
+                .orElseThrow(() -> new NotFoundException("Task not found"));
+
+        Submission submission = submissionRepository.findById(submissionId)
+                .orElseThrow(() -> new NotFoundException("Submission not found"));
+
+        if (!submission.getTaskId().equals(taskId)) {
+            throw new BadRequestException("Submission does not belong to this task");
+        }
+
+        Integer maxScore = task.getMaxScore();
+        if (maxScore != null && req.teacherScore() > maxScore) {
+            throw new BadRequestException("teacherScore must be <= maxScore");
+        }
+
+        submission.setTeacherScore(req.teacherScore());
+        submission.setTeacherComment(trimToNull(req.teacherComment()));
+        submission.setGradedAt(Instant.now());
+
+        Submission saved = submissionRepository.save(submission);
+        return toResponse(saved);
+    }
+
+
     @Transactional(readOnly = true)
     public List<SubmissionShortResponse> listForOwner(Long userId, Long projectId, Long taskId) {
         requireOwner(projectId, userId);
@@ -123,23 +153,22 @@ public class SubmissionService {
         return v.isBlank() ? null : v;
     }
 
+    private SubmissionStatus computeStatus(Submission s) {
+        return s.getTeacherScore() == null ? SubmissionStatus.SUBMITTED : SubmissionStatus.GRADED;
+    }
+
     private SubmissionResponse toResponse(Submission s) {
         return new SubmissionResponse(
-                s.getId(),
-                s.getTaskId(),
-                s.getStudentId(),
-                s.getTextAnswer(),
-                s.getFileLink(),
-                s.getSubmittedAt(),
-                s.isLate(),
-                s.getTeacherScore(),
-                s.getTeacherComment(),
+                s.getId(), s.getTaskId(), s.getStudentId(),
+                s.getTextAnswer(), s.getFileLink(),
+                s.getSubmittedAt(), s.isLate(),
+                s.getTeacherScore(), s.getTeacherComment(),
                 s.getGradedAt(),
-                s.getAiScore(),
-                s.getAiComment(),
-                s.getAiEvaluatedAt()
+                s.getAiScore(), s.getAiComment(), s.getAiEvaluatedAt(),
+                computeStatus(s)
         );
     }
+
 
     private SubmissionShortResponse toShort(Submission s) {
         return new SubmissionShortResponse(

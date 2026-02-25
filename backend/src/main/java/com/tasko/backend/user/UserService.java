@@ -1,10 +1,14 @@
 package com.tasko.backend.user;
 
-import com.tasko.backend.exception.*;
+import com.tasko.backend.CurrentUser;
+import com.tasko.backend.exception.BadRequestException;
+import com.tasko.backend.exception.UnauthenticatedException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import static org.apache.logging.log4j.util.Strings.trimToNull;
 
 @Service
 @RequiredArgsConstructor
@@ -14,45 +18,36 @@ public class UserService {
 
     @Transactional
     public User getOrCreateFromGoogle(OAuth2User principal) {
-        if (principal == null) {
-            throw new UnauthenticatedException();
-        }
+        if (principal == null) throw new UnauthenticatedException();
 
         String googleId = trimToNull(getStringAttr(principal, "sub"));
         String email = trimToNull(getStringAttr(principal, "email"));
         String name = trimToNull(getStringAttr(principal, "name"));
         String picture = trimToNull(getStringAttr(principal, "picture"));
 
-        if (googleId == null) {
-            throw new BadRequestException("Invalid Google principal: missing sub");
-        }
-        if (email == null) {
-            throw new BadRequestException("Invalid Google principal: missing email");
-        }
+        if (googleId == null) throw new BadRequestException("Invalid Google principal: missing sub");
+        if (email == null) throw new BadRequestException("Invalid Google principal: missing email");
 
         String normalizedEmail = email.toLowerCase();
         String finalName = (name != null) ? name : normalizedEmail;
 
-        return userRepository.findByGoogleId(googleId)
-                .orElseGet(() -> userRepository.save(
-                        User.builder()
-                                .googleId(googleId)
-                                .email(normalizedEmail)
-                                .name(finalName)
-                                .avatarUrl(picture)
-                                .enabled(true)
-                                .build()
-                ));
+        User u = userRepository.findByGoogleId(googleId)
+                .orElseGet(() -> User.builder()
+                        .googleId(googleId)
+                        .enabled(true)
+                        .build());
+
+        u.setEmail(normalizedEmail);
+        u.setName(finalName);
+        u.setAvatarUrl(picture);
+
+        return userRepository.save(u);
     }
 
-    @Transactional(readOnly = true)
-    public User getMe(Long userId) {
-        if (userId == null) {
-            throw new UnauthenticatedException();
-        }
-
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found: " + userId));
+    @Transactional
+    public UserResponse me(OAuth2User principal) {
+        User u = getOrCreateFromGoogle(principal);
+        return new UserResponse(u.getId(), u.getEmail(), u.getName(), u.getAvatarUrl(), u.getCreatedAt());
     }
 
     private static String getStringAttr(OAuth2User principal, String key) {
@@ -61,11 +56,5 @@ public class UserService {
 
         String s = String.valueOf(v);
         return "null".equalsIgnoreCase(s) ? null : s;
-    }
-
-    private static String trimToNull(String s) {
-        if (s == null) return null;
-        String v = s.trim();
-        return v.isBlank() ? null : v;
     }
 }

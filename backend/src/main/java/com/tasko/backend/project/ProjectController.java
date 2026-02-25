@@ -38,4 +38,13 @@ public class ProjectController {
     public List<ProjectResponse> enrolled(@AuthenticationPrincipal CurrentUser principal) {
         return projectService.listEnrolled(principal.getUserId());
     }
+
+    @GetMapping("/{projectId}/progress/me")
+    public ProjectProgressResponse myProgress(
+            @AuthenticationPrincipal CurrentUser principal,
+            @PathVariable Long projectId
+    ) {
+        return projectService.myProgress(principal.getUserId(), projectId);
+    }
+
 }

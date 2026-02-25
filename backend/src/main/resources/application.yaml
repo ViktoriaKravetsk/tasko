@@ -1,5 +1,11 @@
 server:
   port: 8083
+  servlet:
+    session:
+      cookie:
+        same-site: LAX
+        secure: false
+        http-only: true
 
 spring:
   datasource:
@@ -23,8 +29,12 @@ spring:
             client-secret: ${GOOGLE_CLIENT_SECRET}
             scope: openid, profile, email
 
+logging:
+  level:
+    org.springframework.security: DEBUG
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health, info

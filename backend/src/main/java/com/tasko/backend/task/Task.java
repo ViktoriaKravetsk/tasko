@@ -1,6 +1,8 @@
 package com.tasko.backend.task;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -29,7 +31,9 @@ public class Task {
 
     private LocalDate deadline;
 
-    @Column(name = "max_score")
+    @Column(name = "max_score", nullable = false)
+    @NotNull
+    @Min(1)
     private Integer maxScore;
 
     @Enumerated(EnumType.STRING)

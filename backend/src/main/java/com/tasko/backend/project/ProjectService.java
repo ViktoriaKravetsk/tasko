@@ -1,6 +1,8 @@
 package com.tasko.backend.project;
 
 import com.tasko.backend.exception.*;
+import com.tasko.backend.submission.SubmissionRepository;
+import com.tasko.backend.task.TaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -18,6 +20,8 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository memberRepository;
+    private final TaskRepository taskRepository;
+    private final SubmissionRepository submissionRepository;
 
     @Transactional
     public ProjectResponse create(Long ownerId, ProjectCreateRequest req) {
@@ -91,7 +95,7 @@ public class ProjectService {
     @Transactional(readOnly = true)
     public List<ProjectResponse> listEnrolled(Long userId) {
         List<Long> projectIds = memberRepository.findAllByUserId(userId).stream()
-                .filter(m -> m.getRole() == ProjectRole.STUDENT)
+                .filter(m -> ProjectRole.STUDENT.equals(m.getRole()))
                 .map(ProjectMember::getProjectId)
                 .filter(Objects::nonNull)
                 .distinct()
@@ -139,4 +143,16 @@ public class ProjectService {
                 p.getCreatedAt()
         );
     }
+    @Transactional(readOnly = true)
+    public ProjectProgressResponse myProgress(Long userId, Long projectId) {
+
+        memberRepository.findByProjectIdAndUserId(projectId, userId)
+                .orElseThrow(() -> new ForbiddenException("Not a project member"));
+
+        int total = taskRepository.sumMaxScoreByProjectId(projectId);
+        int earned = submissionRepository.sumEarnedScore(projectId, userId);
+
+        return new ProjectProgressResponse(projectId, earned, total);
+    }
+
 }

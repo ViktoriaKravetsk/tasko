@@ -1,29 +1,19 @@
 package com.tasko.backend.user;
 
-import com.tasko.backend.CurrentUser;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api")
 @RequiredArgsConstructor
-@PreAuthorize("isAuthenticated()")
 public class UserController {
 
     private final UserService userService;
 
-    @GetMapping("/me")
-    public UserResponse me(@AuthenticationPrincipal CurrentUser principal) {
-        User user = userService.getMe(principal.getUserId());
-
-        return new UserResponse(
-                user.getId(),
-                user.getEmail(),
-                user.getName(),
-                user.getAvatarUrl(),
-                user.getCreatedAt()
-        );
+    @GetMapping("/api/me")
+    public UserResponse me(@AuthenticationPrincipal OAuth2User principal) {
+        return userService.me(principal);
     }
 }

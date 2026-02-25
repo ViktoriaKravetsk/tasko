@@ -1,12 +1,12 @@
 CREATE TABLE users (
-                       id           BIGSERIAL PRIMARY KEY,
-                       google_id    VARCHAR(128),
-                       email        VARCHAR(255) NOT NULL UNIQUE,
-                       name         VARCHAR(120) NOT NULL,
-                       avatar_url   TEXT,
-                       theme        VARCHAR(10) NOT NULL DEFAULT 'LIGHT',
-                       enabled      BOOLEAN NOT NULL DEFAULT TRUE,
-                       created_at   TIMESTAMP NOT NULL DEFAULT NOW()
+                       id          BIGSERIAL PRIMARY KEY,
+                       google_id   VARCHAR(64)  NOT NULL UNIQUE,
+                       email       VARCHAR(255) NOT NULL UNIQUE,
+                       name        VARCHAR(255) NOT NULL,
+                       avatar_url  TEXT,
+                       enabled     BOOLEAN      NOT NULL DEFAULT TRUE,
+                       created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+                       updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
 CREATE TABLE projects (
