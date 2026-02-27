@@ -44,6 +44,7 @@ export default function AppShell() {
                     <div className="sidebar__block">
                         <div className="sidebar__title">Menu</div>
                         <NavLink to="/" className={cx}>Projects</NavLink>
+                        <NavLink to="/profile" className={cx}>Profile</NavLink>
                     </div>
 
 

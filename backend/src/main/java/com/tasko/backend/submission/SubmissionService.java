@@ -8,6 +8,8 @@ import com.tasko.backend.project.ProjectMemberRepository;
 import com.tasko.backend.project.ProjectRole;
 import com.tasko.backend.task.Task;
 import com.tasko.backend.task.TaskRepository;
+import com.tasko.backend.user.User;
+import com.tasko.backend.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ public class SubmissionService {
     private final SubmissionRepository submissionRepository;
     private final TaskRepository taskRepository;
     private final ProjectMemberRepository memberRepository;
+    private final UserRepository userRepository;
 
     @Transactional
     public SubmissionResponse upsertMy(Long userId, Long projectId, Long taskId, SubmissionUpsertRequest req) {
@@ -109,6 +112,22 @@ public class SubmissionService {
         return toResponse(saved);
     }
 
+    @Transactional(readOnly = true)
+    public SubmissionResponse getForOwner(Long userId, Long projectId, Long taskId, Long submissionId) {
+        requireOwner(projectId, userId);
+
+        taskRepository.findByIdAndProjectId(taskId, projectId)
+                .orElseThrow(() -> new NotFoundException("Task not found"));
+
+        Submission submission = submissionRepository.findById(submissionId)
+                .orElseThrow(() -> new NotFoundException("Submission not found"));
+
+        if (!submission.getTaskId().equals(taskId)) {
+            throw new BadRequestException("Submission does not belong to this task");
+        }
+
+        return toResponse(submission);
+    }
 
     @Transactional(readOnly = true)
     public List<SubmissionShortResponse> listForOwner(Long userId, Long projectId, Long taskId) {
@@ -144,7 +163,6 @@ public class SubmissionService {
     private boolean computeLate(Task task) {
         LocalDate deadline = task.getDeadline();
         return deadline != null && LocalDate.now().isAfter(deadline);
-
     }
 
     private String trimToNull(String s) {
@@ -158,8 +176,12 @@ public class SubmissionService {
     }
 
     private SubmissionResponse toResponse(Submission s) {
+        String studentName = userRepository.findById(s.getStudentId())
+                .map(User::getName)
+                .orElse("Unknown");
+
         return new SubmissionResponse(
-                s.getId(), s.getTaskId(), s.getStudentId(),
+                s.getId(), s.getTaskId(), s.getStudentId(), studentName,
                 s.getTextAnswer(), s.getFileLink(),
                 s.getSubmittedAt(), s.isLate(),
                 s.getTeacherScore(), s.getTeacherComment(),
@@ -169,12 +191,16 @@ public class SubmissionService {
         );
     }
 
-
     private SubmissionShortResponse toShort(Submission s) {
+        String studentName = userRepository.findById(s.getStudentId())
+                .map(User::getName)
+                .orElse("Unknown");
+
         return new SubmissionShortResponse(
                 s.getId(),
                 s.getTaskId(),
                 s.getStudentId(),
+                studentName,
                 s.getSubmittedAt(),
                 s.isLate(),
                 s.getTeacherScore(),

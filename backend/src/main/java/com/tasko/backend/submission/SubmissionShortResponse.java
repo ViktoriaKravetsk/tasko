@@ -6,6 +6,7 @@ public record SubmissionShortResponse(
         Long id,
         Long taskId,
         Long studentId,
+        String studentName,
         Instant submittedAt,
         boolean late,
         Integer teacherScore,

@@ -14,7 +14,7 @@ export default function ProjectsPage() {
 
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
-    const [deadline, setDeadline] = useState('') // yyyy-mm-dd
+    const [deadline, setDeadline] = useState('')
     const [createLoading, setCreateLoading] = useState(false)
 
     const [joinCode, setJoinCode] = useState('')

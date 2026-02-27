@@ -38,7 +38,6 @@ public class SubmissionController {
         return submissionService.grade(principal.getUserId(), projectId, taskId, submissionId, req);
     }
 
-
     @GetMapping("/submission/me")
     public SubmissionResponse getMy(
             @AuthenticationPrincipal CurrentUser principal,
@@ -55,5 +54,15 @@ public class SubmissionController {
             @PathVariable Long taskId
     ) {
         return submissionService.listForOwner(principal.getUserId(), projectId, taskId);
+    }
+
+    @GetMapping("/submissions/{submissionId}")
+    public SubmissionResponse getForOwner(
+            @AuthenticationPrincipal CurrentUser principal,
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @PathVariable Long submissionId
+    ) {
+        return submissionService.getForOwner(principal.getUserId(), projectId, taskId, submissionId);
     }
 }

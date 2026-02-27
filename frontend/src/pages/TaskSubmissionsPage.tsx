@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import type { Submission } from '../api/types'
+import type { SubmissionShort } from '../api/types'
 import { submissionsApi } from '../api/submissions.api'
 
 type LocationState = { mode?: 'teacher' | 'student' }
@@ -12,7 +12,7 @@ export default function TaskSubmissionsPage() {
 
     const mode = ((useLocation().state as LocationState | null)?.mode ?? 'teacher') as 'teacher' | 'student'
 
-    const [items, setItems] = useState<Submission[]>([])
+    const [items, setItems] = useState<SubmissionShort[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
@@ -47,7 +47,7 @@ export default function TaskSubmissionsPage() {
 
             <div style={{ marginTop: 14, marginBottom: 10 }}>
                 <h1>Submissions</h1>
-                <div className="small">Task #{tid} • Project #{pid}</div>
+                <div className="small">All submissions for this task</div>
             </div>
 
             {error ? (
@@ -69,7 +69,6 @@ export default function TaskSubmissionsPage() {
                     <table className="table">
                         <thead>
                         <tr>
-                            <th>ID</th>
                             <th>Student</th>
                             <th>Submitted</th>
                             <th>Score</th>
@@ -79,8 +78,7 @@ export default function TaskSubmissionsPage() {
                         <tbody>
                         {items.map((s) => (
                             <tr key={s.id}>
-                                <td>#{s.id}</td>
-                                <td>{s.studentId}</td>
+                                <td>{s.studentName ?? 'Unknown'}</td>
                                 <td>{s.submittedAt ?? '—'}</td>
                                 <td>{s.teacherScore ?? '—'}</td>
                                 <td style={{ textAlign: 'right' }}>

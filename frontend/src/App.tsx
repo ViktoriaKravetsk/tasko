@@ -5,6 +5,7 @@ import ProjectPage from './pages/ProjectPage'
 import TaskPage from './pages/TaskPage'
 import TaskSubmissionsPage from './pages/TaskSubmissionsPage'
 import GradeSubmissionPage from './pages/GradeSubmissionPage'
+import ProfilePage from './pages/ProfilePage'
 import { RequireAuth } from './auth/RequireAuth'
 import AppShell from './layout/AppShell'
 
@@ -22,6 +23,7 @@ export default function App() {
                     }
                 >
                     <Route path="/" element={<ProjectsPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/projects/:projectId" element={<ProjectPage />} />
                     <Route path="/projects/:projectId/tasks/:taskId" element={<TaskPage />} />
                     <Route path="/projects/:projectId/tasks/:taskId/submissions" element={<TaskSubmissionsPage />} />

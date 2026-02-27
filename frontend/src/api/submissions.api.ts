@@ -1,5 +1,5 @@
 import { api } from './http'
-import type { Submission } from './types'
+import type { Submission, SubmissionShort } from './types'
 
 export type SubmitRequest = {
     textAnswer?: string | null
@@ -22,7 +22,10 @@ export const submissionsApi = {
         }),
 
     listByTask: (projectId: number, taskId: number) =>
-        api<Submission[]>(`/api/projects/${projectId}/tasks/${taskId}/submissions`),
+        api<SubmissionShort[]>(`/api/projects/${projectId}/tasks/${taskId}/submissions`),
+
+    getById: (projectId: number, taskId: number, submissionId: number) =>
+        api<Submission>(`/api/projects/${projectId}/tasks/${taskId}/submissions/${submissionId}`),
 
     grade: (projectId: number, taskId: number, submissionId: number, body: GradeRequest) =>
         api<Submission>(`/api/projects/${projectId}/tasks/${taskId}/submissions/${submissionId}/grade`, {

@@ -6,6 +6,7 @@ public record SubmissionResponse(
         Long id,
         Long taskId,
         Long studentId,
+        String studentName,
         String textAnswer,
         String fileLink,
         Instant submittedAt,

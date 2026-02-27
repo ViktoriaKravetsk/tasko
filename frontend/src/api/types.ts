@@ -27,6 +27,7 @@ export type Submission = {
     id: number
     taskId: number
     studentId: number
+    studentName?: string
     textAnswer?: string | null
     fileLink?: string | null
     submittedAt?: string | null
@@ -38,6 +39,17 @@ export type Submission = {
     aiEvaluatedAt?: string | null
     late?: boolean
     status?: 'SUBMITTED' | 'GRADED' | 'NOT_SUBMITTED'
+}
+
+export type SubmissionShort = {
+    id: number
+    taskId: number
+    studentId: number
+    studentName?: string
+    submittedAt?: string | null
+    late?: boolean
+    teacherScore?: number | null
+    gradedAt?: string | null
 }
 
 export type ProjectProgress = {

@@ -29,12 +29,12 @@ export default function GradeSubmissionPage() {
         try {
             const t = await tasksApi.get(pid, tid)
             setTask(t)
-            const list = await submissionsApi.listByTask(pid, tid)
-            const found = list.find((x) => x.id === sid) ?? null
-            setSub(found)
 
-            setTeacherScore(found?.teacherScore ?? 0)
-            setTeacherComment(found?.teacherComment ?? '')
+            const full = await submissionsApi.getById(pid, tid, sid)
+            setSub(full)
+
+            setTeacherScore(full.teacherScore ?? 0)
+            setTeacherComment(full.teacherComment ?? '')
         } catch (e: any) {
             setError(e?.message ?? 'Failed to load')
         } finally {
@@ -80,7 +80,9 @@ export default function GradeSubmissionPage() {
 
             <div style={{ marginTop: 14 }}>
                 <h1>Grade submission</h1>
-                <div className="small">Submission #{sid} • Task #{tid}</div>
+                {task && sub ? (
+                    <div className="small">{task.title} • Student: {sub.studentName ?? 'Unknown'}</div>
+                ) : null}
             </div>
 
             {error ? (
@@ -98,7 +100,7 @@ export default function GradeSubmissionPage() {
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                             <span className="badge">Task: {task.title}</span>
                             <span className="badge badge--olive">Max: {task.maxScore}</span>
-                            <span className="badge">Student: {sub.studentId}</span>
+                            <span className="badge">Student: {sub.studentName ?? 'Unknown'}</span>
                             <span className="badge">Submitted: {sub.submittedAt ?? '—'}</span>
                         </div>
 
@@ -112,8 +114,20 @@ export default function GradeSubmissionPage() {
 
                             <div className="card" style={{ boxShadow: 'var(--shadow-sm)' }}>
                                 <h2>File link</h2>
+
                                 {sub.fileLink ? (
-                                    <a href={sub.fileLink} target="_blank" rel="noreferrer" className="btn btn--primary" style={{ height: 36, padding: '0 10px', display: 'inline-flex', alignItems: 'center' }}>
+                                    <a
+                                        href={sub.fileLink}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="btn btn--primary"
+                                        style={{
+                                            height: 36,
+                                            padding: '0 10px',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                        }}
+                                    >
                                         Open link →
                                     </a>
                                 ) : (
@@ -158,13 +172,6 @@ export default function GradeSubmissionPage() {
                                 >
                                     Reset
                                 </button>
-                            </div>
-                        </div>
-
-                        <div className="card card--soft" style={{ marginTop: 12 }}>
-                            <div className="small" style={{ display: 'grid', gap: 6 }}>
-                                <div>Current score: {sub.teacherScore ?? '—'}</div>
-                                {sub.teacherComment ? <div>Current comment: {sub.teacherComment}</div> : null}
                             </div>
                         </div>
                     </div>

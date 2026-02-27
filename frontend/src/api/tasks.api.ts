@@ -4,7 +4,7 @@ import type { Task } from './types'
 export type TaskCreateRequest = {
     title: string
     description?: string | null
-    deadline?: string | null // "YYYY-MM-DD"
+    deadline?: string | null
     maxScore: number
 }
 
