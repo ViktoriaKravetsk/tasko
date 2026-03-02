@@ -47,4 +47,20 @@ public class ProjectController {
         return projectService.myProgress(principal.getUserId(), projectId);
     }
 
+    @DeleteMapping("/{projectId}")
+    public void delete(
+            @AuthenticationPrincipal CurrentUser principal,
+            @PathVariable Long projectId
+    ) {
+        projectService.deleteProject(principal.getUserId(), projectId);
+    }
+
+    @PostMapping("/{projectId}/leave")
+    public void leave(
+            @AuthenticationPrincipal CurrentUser principal,
+            @PathVariable Long projectId
+    ) {
+        projectService.leaveProject(principal.getUserId(), projectId);
+    }
+
 }

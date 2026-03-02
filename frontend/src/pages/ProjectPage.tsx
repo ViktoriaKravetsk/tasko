@@ -1,194 +1,356 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
-import type { Project, Task, ProjectProgress } from '../api/types'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import type { Project, Submission, Task } from '../api/types'
+import { projectsApi } from '../api/projects.api'
 import { tasksApi } from '../api/tasks.api'
-import { progressApi } from '../api/progress.api'
+import { submissionsApi } from '../api/submissions.api'
 
-type LocationState = {
-    project?: Project
-    mode?: 'teacher' | 'student'
-}
+type Mode = 'teacher' | 'student'
+type Tab = 'overview' | 'tasks' | 'create'
+type LocationState = { mode?: Mode }
 
 export default function ProjectPage() {
     const { projectId } = useParams()
-    const pid = Number(projectId)
+    const projectIdNum = projectId ? Number(projectId) : NaN
 
+    const navigate = useNavigate()
     const location = useLocation()
-    const state = (location.state || {}) as LocationState
+    const mode: Mode = (location.state as LocationState | null)?.mode ?? 'teacher'
 
-    const mode = state.mode ?? 'student'
-    const isTeacher = useMemo(() => mode === 'teacher', [mode])
-
-    const [project] = useState<Project | null>(state.project ?? null)
-
+    const [project, setProject] = useState<Project | null>(null)
     const [tasks, setTasks] = useState<Task[]>([])
-    const [progress, setProgress] = useState<ProjectProgress | null>(null)
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState('')
+    const [mySubs, setMySubs] = useState<Record<number, Submission | null>>({})
+    const [loading, setLoading] = useState(false)
+    const [err, setErr] = useState<string | null>(null)
+    const [tab, setTab] = useState<Tab>('tasks')
+    const [tTitle, setTTitle] = useState('')
+    const [tDesc, setTDesc] = useState('')
+    const [tDeadline, setTDeadline] = useState('')
+    const [tMaxScore, setTMaxScore] = useState<number>(100)
+    const [copied, setCopied] = useState(false)
 
-    const [title, setTitle] = useState('')
-    const [description, setDescription] = useState('')
-    const [deadline, setDeadline] = useState('')
-    const [maxScore, setMaxScore] = useState(10)
-    const [creating, setCreating] = useState(false)
+    const emojis = useMemo(() => ['📚', '🎨', '🔬', '🚀', '💡', '🎯', '🌍', '🎵', '🖌️', '⚽', '🧠', '🔭'], [])
+    const emoji = useMemo(() => (projectId ? emojis[Math.abs(hash(projectId)) % emojis.length] : '📚'), [emojis, projectId])
 
-    async function load() {
-        setError('')
-        setLoading(true)
+    const copy = async (text: string) => {
+        if (!text) return
         try {
-            const [t, p] = await Promise.all([tasksApi.list(pid), progressApi.my(pid).catch(() => null)])
-            setTasks(t)
-            setProgress(p)
+            await navigator.clipboard.writeText(text)
+        } catch {
+            const ta = document.createElement('textarea')
+            ta.value = text
+            document.body.appendChild(ta)
+            ta.select()
+            document.execCommand('copy')
+            document.body.removeChild(ta)
+        } finally {
+            setCopied(true)
+            window.setTimeout(() => setCopied(false), 1200)
+        }
+    }
+
+    const load = async () => {
+        if (!projectId) return
+        const pid = Number(projectId)
+        if (!Number.isFinite(pid)) return
+
+        setLoading(true)
+        setErr(null)
+
+        try {
+            const [my, enrolled, ts] = await Promise.all([projectsApi.my(), projectsApi.enrolled(), tasksApi.list(pid)])
+            const p = [...my, ...enrolled].find((x) => x.id === pid) ?? null
+
+            setProject(p)
+            setTasks(ts)
+
+            if (mode === 'student') {
+                const pairs = await Promise.all(
+                    ts.map(async (t: Task) => {
+                        try {
+                            const s = await submissionsApi.my(pid, t.id)
+                            return [t.id, s] as const
+                        } catch {
+                            return [t.id, null] as const
+                        }
+                    })
+                )
+
+                const map: Record<number, Submission | null> = {}
+                for (const [tid, s] of pairs) map[tid] = s
+                setMySubs(map)
+            } else {
+                setMySubs({})
+            }
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to load project')
+            setErr(e?.response?.data?.message ?? 'Failed to load project')
         } finally {
             setLoading(false)
         }
     }
 
-    async function onCreateTask() {
-        if (!title.trim()) return
-        setCreating(true)
-        setError('')
+    useEffect(() => {
+        void load()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectId])
+
+    const createTask = async () => {
+        if (!projectId || Number.isNaN(projectIdNum)) return
+        if (!tTitle.trim()) return
+        setLoading(true)
+        setErr(null)
         try {
-            await tasksApi.create(pid, {
-                title: title.trim(),
-                description: description.trim() ? description.trim() : null,
-                deadline: deadline ? deadline : null,
-                maxScore: Number(maxScore),
+            await tasksApi.create(projectIdNum, {
+                title: tTitle.trim(),
+                description: tDesc.trim() || undefined,
+                deadline: tDeadline || undefined,
+                maxScore: tMaxScore,
             })
-            setTitle('')
-            setDescription('')
-            setDeadline('')
-            setMaxScore(10)
+            setTTitle('')
+            setTDesc('')
+            setTDeadline('')
+            setTMaxScore(100)
             await load()
+            setTab('tasks')
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to create task')
+            setErr(e?.response?.data?.message ?? 'Create task failed')
         } finally {
-            setCreating(false)
+            setLoading(false)
         }
     }
 
-    useEffect(() => {
-        if (!Number.isFinite(pid)) return
-        void load()
-    }, [pid])
+    const deleteProject = async () => {
+        if (!projectId || Number.isNaN(projectIdNum)) return
+        if (!confirm('Delete this project?')) return
+        setLoading(true)
+        setErr(null)
+        try {
+            await projectsApi.delete(projectIdNum)
+            navigate('/')
+        } catch (e: any) {
+            setErr(e?.response?.data?.message ?? 'Delete failed')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const submittedCount = useMemo(() => Object.values(mySubs).filter(Boolean).length, [mySubs])
+    const progressPct = useMemo(() => {
+        const total = tasks.length
+        if (total === 0) return 0
+        return Math.round((submittedCount / total) * 100)
+    }, [submittedCount, tasks.length])
 
     return (
-        <div style={{ display: 'grid', gap: 14 }}>
-            <div className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                    <div>
-                        <h1>{project?.name ?? `Project #${pid}`}</h1>
-                        {project?.description ? <div className="small" style={{ marginTop: 6 }}>{project.description}</div> : null}
+        <div className="page-wrap">
+            <Link to="/" className="btn btn--ghost" style={{ textDecoration: 'none' }}>
+                ← Back
+            </Link>
 
-                        <div className="small" style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                            {project?.deadline ? <span className="badge badge--olive">deadline: {project.deadline}</span> : null}
-                            {project?.joinCode ? <span className="badge">joinCode: {project.joinCode}</span> : null}
-                            <span className="badge">{mode.toUpperCase()}</span>
+            {err && (
+                <div className="alert alert--error" style={{ marginTop: 12 }}>
+                    {err}
+                </div>
+            )}
+
+            <div className="panel" style={{ marginTop: 14 }}>
+                <div className="panel-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                        <div className="project-card-emoji" style={{ margin: 0 }}>
+                            {emoji}
+                        </div>
+                        <div>
+                            <div className="panel-title">{project?.name ?? (loading ? 'Loading…' : 'Project')}</div>
+                            <div className="panel-sub">{project?.description ?? 'No description'}</div>
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                        <button className="btn" onClick={() => void load()} disabled={loading}>
-                            {loading ? 'Loading…' : 'Refresh'}
+                    <span className={mode === 'teacher' ? 'role-badge rb-teacher' : 'role-badge rb-student'}>
+                        {mode === 'teacher' ? 'Teacher' : 'Student'}
+                    </span>
+
+                    {project?.joinCode ? (
+                        <button
+                            className="count-pill count-pill--pink"
+                            onClick={() => void copy(project.joinCode ?? '')}
+                            title="Copy join code"
+                            type="button"
+                        >
+                            {copied ? 'Copied ✓' : `${project.joinCode} 📋`}
                         </button>
-                        <Link to="/" className="btn btn--ghost">
-                            ← Back
-                        </Link>
-                    </div>
+                    ) : null}
+
+                    {mode === 'teacher' ? (
+                        <button className="btn btn--danger" onClick={deleteProject} disabled={loading} type="button">
+                            🗑 Delete
+                        </button>
+                    ) : null}
                 </div>
 
-                {error ? (
-                    <div className="card card--soft" style={{ marginTop: 12 }}>
-                        <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 11 }}>Error</div>
-                        <div className="small">{error}</div>
+                <div className="panel-body">
+                    <div className="tabs">
+                        <button className={tab === 'overview' ? 'tab tab--active' : 'tab'} onClick={() => setTab('overview')} type="button">
+                            🌼 Overview
+                        </button>
+                        <button className={tab === 'tasks' ? 'tab tab--active' : 'tab'} onClick={() => setTab('tasks')} type="button">
+                            📋 Tasks
+                        </button>
+                        {mode === 'teacher' ? (
+                            <button className={tab === 'create' ? 'tab tab--active' : 'tab'} onClick={() => setTab('create')} type="button">
+                                ✨ Create task
+                            </button>
+                        ) : null}
                     </div>
-                ) : null}
-            </div>
 
-            {progress ? (
-                <div className="card card--soft">
-                    <h2>My progress</h2>
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-            <span className="badge badge--olive">
-              {progress.earned} / {progress.total}
-            </span>
-                        <div className="small">Earned points / total points.</div>
-                    </div>
-                </div>
-            ) : null}
-
-            <div className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                    <div>
-                        <h2>Tasks</h2>
-                        <div className="small">Open a task to submit or grade .</div>
-                    </div>
-                </div>
-
-                {loading ? <div className="small" style={{ marginTop: 10 }}>Loading…</div> : null}
-                {!loading && tasks.length === 0 ? <div className="small" style={{ marginTop: 10 }}>No tasks yet.</div> : null}
-
-                {tasks.length > 0 ? (
-                    <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-                        {tasks.map((t) => (
-                            <div key={t.id} className="card card--soft" style={{ boxShadow: 'var(--shadow-sm)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                                    <div>
-                                        <div style={{ fontWeight: 700 }}>{t.title}</div>
-                                        <div className="small" style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                                            {t.deadline ? <span className="badge badge--olive">deadline: {t.deadline}</span> : null}
-                                            <span className="badge">max: {t.maxScore}</span>
-                                        </div>
-                                    </div>
-
-                                    <Link
-                                        to={`/projects/${pid}/tasks/${t.id}`}
-                                        state={{ mode }}
-                                        className="btn btn--primary"
-                                        style={{ height: 36, padding: '0 10px' }}
-                                    >
-                                        Open →
-                                    </Link>
+                    {tab === 'overview' ? (
+                        <div className="overview-grid">
+                            <div className="info-card">
+                                <div className="info-title">Quick info</div>
+                                <div className="info-row">
+                                    <span>🗓 Deadline</span>
+                                    <span>{project?.deadline ?? 'No deadline'}</span>
                                 </div>
+                                <div className="info-row">
+                                    <span>📌 Tasks</span>
+                                    <span>{tasks.length}</span>
+                                </div>
+                                {mode === 'student' ? (
+                                    <div className="info-row">
+                                        <span>✅ Submitted</span>
+                                        <span>{submittedCount}</span>
+                                    </div>
+                                ) : null}
                             </div>
-                        ))}
-                    </div>
-                ) : null}
-            </div>
 
-            {isTeacher ? (
-                <div className="card card--soft">
-                    <h2>Create task</h2>
+                            <div className="info-card">
+                                <div className="info-title">My progress</div>
+                                {mode === 'student' ? (
+                                    <>
+                                        <div className="progress-bar">
+                                            <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+                                        </div>
+                                        <div className="progress-label">
+                                            {progressPct}% ({submittedCount}/{tasks.length})
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="muted">As a teacher, you can create tasks and review submissions.</div>
+                                )}
+                            </div>
+                        </div>
+                    ) : null}
 
-                    <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
-                        <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
+                    {tab === 'tasks' ? (
+                        <>
+                            {tasks.length === 0 ? (
+                                <div className="empty">
+                                    <div className="empty-icon">📝</div>
+                                    <div className="empty-text">No tasks yet</div>
+                                    <div className="empty-sub">{mode === 'teacher' ? 'Create your first task!' : 'Ask your teacher to add tasks.'}</div>
+                                </div>
+                            ) : (
+                                <div className="tasks-grid">
+                                    {tasks.map((t: Task) => {
+                                        const sub = mySubs[t.id]
+                                        const status = mode === 'student' ? (sub ? 'Submitted' : 'Not submitted') : 'Open'
+                                        return (
+                                            <div key={t.id} className="task-card">
+                                                <div className="task-top">
+                                                    <div>
+                                                        <div className="task-title">{t.title}</div>
+                                                        <div className="task-desc">{t.description || 'No description'}</div>
+                                                    </div>
+                                                    <span className={sub ? 'status-pill st-done' : 'status-pill st-open'}>
+                                                        {sub ? '✅' : '⏳'} {status}
+                                                    </span>
+                                                </div>
 
-                        <textarea
-                            className="input"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Description (optional)"
-                            rows={4}
-                        />
+                                                <div className="task-meta">
+                                                    <span className="meta-pill">📅 {t.deadline || 'No deadline'}</span>
+                                                    <span className="meta-pill">🏅 {t.maxScore} pts</span>
+                                                </div>
 
-                        <input className="input" value={deadline} onChange={(e) => setDeadline(e.target.value)} type="date" />
+                                                <div className="task-actions">
+                                                    <Link
+                                                        to={`/projects/${projectId}/tasks/${t.id}`}
+                                                        state={{ mode }}
+                                                        className="btn btn--ghost"
+                                                        style={{ textDecoration: 'none' }}
+                                                    >
+                                                        Open
+                                                    </Link>
 
-                        <input
-                            className="input"
-                            value={maxScore}
-                            onChange={(e) => setMaxScore(Number(e.target.value))}
-                            type="number"
-                            min={0}
-                        />
+                                                    {mode === 'teacher' ? (
+                                                        <Link
+                                                            to={`/projects/${projectId}/tasks/${t.id}/submissions`}
+                                                            state={{ mode }}
+                                                            className="btn btn--primary"
+                                                            style={{ textDecoration: 'none' }}
+                                                        >
+                                                            Submissions →
+                                                        </Link>
+                                                    ) : (
+                                                        <Link
+                                                            to={`/projects/${projectId}/tasks/${t.id}/my-submission`}
+                                                            state={{ mode }}
+                                                            className="btn btn--primary"
+                                                            style={{ textDecoration: 'none' }}
+                                                        >
+                                                            My submission →
+                                                        </Link>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </>
+                    ) : null}
 
-                        <button className="btn btn--primary" onClick={onCreateTask} disabled={creating || !title.trim()}>
-                            {creating ? 'Creating…' : 'Create'}
-                        </button>
-                    </div>
+                    {tab === 'create' && mode === 'teacher' ? (
+                        <div className="create-wrap">
+                            <div className="create-card">
+                                <div className="info-title">✨ Create a task</div>
+                                <div className="muted">Fill out the fields below and publish it to your students.</div>
+                                <div style={{ height: 12 }} />
+
+                                <input className="inp" value={tTitle} onChange={(e) => setTTitle(e.target.value)} placeholder="Task title" />
+
+                                <textarea
+                                    className="inp"
+                                    value={tDesc}
+                                    onChange={(e) => setTDesc(e.target.value)}
+                                    placeholder="Description (optional)"
+                                />
+
+                                <div className="row2">
+                                    <input className="inp" type="date" value={tDeadline} onChange={(e) => setTDeadline(e.target.value)} />
+                                    <input
+                                        className="inp"
+                                        type="number"
+                                        min={0}
+                                        max={1000}
+                                        value={tMaxScore}
+                                        onChange={(e) => setTMaxScore(Number(e.target.value))}
+                                        placeholder="Max score"
+                                    />
+                                </div>
+
+                                <button className="btn-primary" onClick={createTask} disabled={loading || !tTitle.trim()} type="button">
+                                    Create ✨
+                                </button>
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
-            ) : null}
+            </div>
         </div>
     )
+}
+
+function hash(s: string): number {
+    let h = 0
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+    return h
 }

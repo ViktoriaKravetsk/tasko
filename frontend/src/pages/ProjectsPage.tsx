@@ -1,235 +1,264 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { projectsApi, type Project } from '../api/projects.api'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import type { Project } from '../api/types'
+import { projectsApi } from '../api/projects.api'
 
-function errMsg(e: unknown) {
-    return e instanceof Error ? e.message : 'Error'
-}
+type Mode = 'teacher' | 'student'
 
 export default function ProjectsPage() {
-    const [myProjects, setMyProjects] = useState<Project[]>([])
+    const navigate = useNavigate()
+
+    const [owned, setOwned] = useState<Project[]>([])
     const [enrolled, setEnrolled] = useState<Project[]>([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string>('')
+    const [loading, setLoading] = useState(false)
+    const [err, setErr] = useState<string | null>(null)
 
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [deadline, setDeadline] = useState('')
-    const [createLoading, setCreateLoading] = useState(false)
-
     const [joinCode, setJoinCode] = useState('')
-    const [joinLoading, setJoinLoading] = useState(false)
-    const [joinInfo, setJoinInfo] = useState('')
 
-    useEffect(() => {
-        void load()
-    }, [])
+    const [copied, setCopied] = useState<string | null>(null)
 
-    async function load() {
-        setError('')
-        setJoinInfo('')
-        setLoading(true)
+    const copy = async (text: string) => {
+        if (!text) return
         try {
-            const [mine, stud] = await Promise.all([projectsApi.my(), projectsApi.enrolled()])
-            setMyProjects(mine ?? [])
-            setEnrolled(stud ?? [])
-        } catch (e) {
-            setError(errMsg(e))
+            await navigator.clipboard.writeText(text)
+        } catch {
+            const ta = document.createElement('textarea')
+            ta.value = text
+            document.body.appendChild(ta)
+            ta.select()
+            document.execCommand('copy')
+            document.body.removeChild(ta)
+        } finally {
+            setCopied(text)
+            window.setTimeout(() => setCopied(null), 1200)
+        }
+    }
+
+    const load = async () => {
+        setLoading(true)
+        setErr(null)
+        try {
+            const [my, enr] = await Promise.all([projectsApi.my(), projectsApi.enrolled()])
+            setOwned(my)
+            setEnrolled(enr)
+        } catch (e: any) {
+            setErr(e?.response?.data?.message ?? 'Failed to load projects')
         } finally {
             setLoading(false)
         }
     }
 
-    async function onCreate() {
-        setError('')
-        if (!name.trim()) {
-            setError('Project name is required')
-            return
-        }
+    useEffect(() => {
+        void load()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
-        setCreateLoading(true)
+    const create = async () => {
+        if (!name.trim()) return
+        setLoading(true)
+        setErr(null)
         try {
-            const p = await projectsApi.create({
+            await projectsApi.create({
                 name: name.trim(),
                 description: description.trim() ? description.trim() : null,
                 deadline: deadline ? deadline : null,
             })
-
-            setMyProjects((prev) => [p, ...prev])
             setName('')
             setDescription('')
             setDeadline('')
-        } catch (e) {
-            setError(errMsg(e))
+            await load()
+        } catch (e: any) {
+            setErr(e?.response?.data?.message ?? 'Create failed')
         } finally {
-            setCreateLoading(false)
+            setLoading(false)
         }
     }
 
-    async function onJoin() {
-        setError('')
-        setJoinInfo('')
-        const code = joinCode.trim()
-        if (!code) {
-            setError('Join code is required')
-            return
-        }
-
-        setJoinLoading(true)
+    const join = async () => {
+        if (!joinCode.trim()) return
+        setLoading(true)
+        setErr(null)
         try {
-            const p = await projectsApi.joinByCode({ joinCode: code })
-            setEnrolled((prev) => (prev.some((x) => x.id === p.id) ? prev : [p, ...prev]))
-            setJoinInfo(`Joined: ${p.name}`)
+            await projectsApi.joinByCode({ joinCode: joinCode.trim() })
             setJoinCode('')
-        } catch (e) {
-            setError(errMsg(e))
+            await load()
+        } catch (e: any) {
+            setErr(e?.response?.data?.message ?? 'Join failed')
         } finally {
-            setJoinLoading(false)
+            setLoading(false)
         }
     }
 
-    if (loading) {
-        return (
-            <div className="card">
-                <h1>Projects</h1>
-                <div className="small">Loading projects…</div>
-            </div>
-        )
+    const openProject = (p: Project, mode: Mode) => {
+        navigate(`/projects/${p.id}`, { state: { mode, project: p } })
     }
+
+    const emojis = useMemo(() => ['📚', '🎨', '🔬', '🚀', '💡', '🎯', '🌍', '🎵', '🖌️', '⚽', '🧠', '🔭'], [])
+    const pickEmoji = (id: number) => emojis[Math.abs(hash(String(id))) % emojis.length]
 
     return (
-        <div style={{ display: 'grid', gap: 14 }}>
-            <div className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                    <div>
-                        <h1>Projects</h1>
-                        <div className="small">Create or join a course project.</div>
-                    </div>
-
-                    <button className="btn" onClick={() => void load()} disabled={loading}>
-                        Refresh
-                    </button>
-                </div>
-
-                {error ? (
-                    <div className="card card--soft" style={{ marginTop: 12 }}>
-                        <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 11 }}>Error</div>
-                        <div className="small">{error}</div>
-                    </div>
-                ) : null}
-
-                {joinInfo ? (
-                    <div className="card card--soft" style={{ marginTop: 12 }}>
-                        <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 11 }}>OK</div>
-                        <div className="small">{joinInfo}</div>
-                    </div>
-                ) : null}
+        <div className="page-wrap">
+            <div className="section-top">
+                <h2>Projects</h2>
+                <span className="star-deco">✦</span>
+                <span className="star-deco">⭐</span>
+                <button className="btn-refresh" onClick={load} disabled={loading}>
+                    <span className="icon">🔄</span> Refresh
+                </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <div className="card card--soft">
-                    <h2>Create project</h2>
+            {err && <div className="alert alert--error">{err}</div>}
 
-                    <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
-                        <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
-
+            <div className="forms-grid">
+                <div className="form-card">
+                    <div className="form-card-header">
+                        <span className="form-card-title">✏️ Create project</span>
+                        <span className="role-badge rb-teacher">Teacher</span>
+                    </div>
+                    <div className="form-card-body">
+                        <input className="inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" />
                         <textarea
-                            className="input"
+                            className="inp"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             placeholder="Description (optional)"
-                            rows={3}
                         />
-
-                        <input className="input" value={deadline} onChange={(e) => setDeadline(e.target.value)} type="date" />
-
-                        <button className="btn btn--primary" onClick={onCreate} disabled={createLoading}>
-                            {createLoading ? 'Creating…' : 'Create'}
+                        <input className="inp" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+                        <button className="btn-primary" onClick={create} disabled={loading || !name.trim()}>
+                            Create ✨
                         </button>
                     </div>
                 </div>
 
-                <div className="card card--soft">
-                    <h2>Join by code</h2>
-
-                    <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
-                        <input className="input" value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="Join code" />
-
-                        <button className="btn btn--primary" onClick={onJoin} disabled={joinLoading}>
-                            {joinLoading ? 'Joining…' : 'Join'}
+                <div className="form-card">
+                    <div className="form-card-header">
+                        <span className="form-card-title">🔑 Join by code</span>
+                        <span className="role-badge rb-student">Student</span>
+                    </div>
+                    <div className="form-card-body">
+                        <input
+                            className="inp"
+                            value={joinCode}
+                            onChange={(e) => setJoinCode(e.target.value)}
+                            placeholder="Enter join code..."
+                        />
+                        <button className="btn-primary green" onClick={join} disabled={loading || !joinCode.trim()}>
+                            Join 🚀
                         </button>
+
+                        <div className="hint-box">
+                            <div className="hint-title">💡 How it works?</div>
+                            <div className="hint-text">Ask your teacher for a project code and enter it above to join.</div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div className="card">
-                <h2>My projects </h2>
-                <div className="small">Projects which you created</div>
+            <div className="panel" style={{ marginTop: 20 }}>
+                <div className="panel-header">
+                    <div>
+                        <div className="panel-title">📁 My projects</div>
+                        <div className="panel-sub">Projects you created</div>
+                    </div>
+                    <span className="count-pill count-pill--yellow">{owned.length}</span>
+                </div>
 
-                {myProjects.length === 0 ? <div className="small" style={{ marginTop: 10 }}>No projects yet.</div> : null}
+                <div className="panel-body">
+                    {owned.length === 0 ? (
+                        <div className="empty">
+                            <div className="empty-icon">🌱</div>
+                            <div className="empty-text">No projects yet</div>
+                            <div className="empty-sub">Create your first project above!</div>
+                        </div>
+                    ) : (
+                        <div className="projects-grid">
+                            {owned.map((p) => (
+                                <div key={p.id} className="project-card" onClick={() => openProject(p, 'teacher')}>
+                                    <div className="project-card-emoji">{pickEmoji(p.id)}</div>
+                                    <div className="project-card-name">{p.name}</div>
+                                    <div className="project-card-desc">{p.description ?? 'No description'}</div>
+                                    <div className="project-card-meta">
+                                        <span>👤 Teacher</span>
+                                        <span className="project-card-date">{p.deadline ?? 'No deadline'}</span>
 
-                <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-                    {myProjects.map((p) => (
-                        <div key={p.id} className="card card--soft" style={{ boxShadow: 'var(--shadow-sm)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                                <div>
-                                    <div style={{ fontWeight: 700 }}>{p.name}</div>
-                                    <div className="small" style={{ marginTop: 6 }}>
-                                        joinCode: <span className="badge">{p.joinCode}</span>
-                                        {p.deadline ? <span style={{ marginLeft: 10 }}>deadline: {p.deadline}</span> : null}
+                                        {p.joinCode ? (
+                                            <button
+                                                type="button"
+                                                className="count-pill count-pill--pink"
+                                                title="Copy join code"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    void copy(p.joinCode ?? '')
+                                                }}
+                                            >
+                                                {copied === p.joinCode ? 'Copied ✓' : `${p.joinCode} 📋`}
+                                            </button>
+                                        ) : null}
                                     </div>
                                 </div>
-
-                                <Link
-                                    to={`/projects/${p.id}`}
-                                    state={{ project: p, mode: 'teacher' as const }}
-                                    className="btn btn--primary"
-                                    style={{ height: 36, padding: '0 10px' }}
-                                >
-                                    Open →
-                                </Link>
-                            </div>
+                            ))}
                         </div>
-                    ))}
+                    )}
                 </div>
             </div>
 
-            <div className="card">
-                <h2>Enrolled projects </h2>
-                <div className="small">Projects you have enrolled</div>
+            <div className="panel">
+                <div className="panel-header">
+                    <div>
+                        <div className="panel-title">🎒 Enrolled projects</div>
+                        <div className="panel-sub">Projects you joined</div>
+                    </div>
+                    <span className="count-pill count-pill--pink">{enrolled.length}</span>
+                </div>
 
-                {enrolled.length === 0 ? <div className="small" style={{ marginTop: 10 }}>Not enrolled yet.</div> : null}
+                <div className="panel-body">
+                    {enrolled.length === 0 ? (
+                        <div className="empty">
+                            <div className="empty-icon">🔍</div>
+                            <div className="empty-text">Not enrolled yet</div>
+                            <div className="empty-sub">Join a project using a code!</div>
+                        </div>
+                    ) : (
+                        <div className="projects-grid">
+                            {enrolled.map((p) => (
+                                <div key={p.id} className="project-card" onClick={() => openProject(p, 'student')}>
+                                    <div className="project-card-emoji">{pickEmoji(p.id)}</div>
+                                    <div className="project-card-name">{p.name}</div>
+                                    <div className="project-card-desc">{p.description ?? 'Joined via code'}</div>
+                                    <div className="project-card-meta">
+                                        <span>🎒 Student</span>
 
-                <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-                    {enrolled.map((p) => (
-                        <div key={p.id} className="card card--soft" style={{ boxShadow: 'var(--shadow-sm)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                                <div>
-                                    <div style={{ fontWeight: 700 }}>{p.name}</div>
-                                    <div className="small" style={{ marginTop: 6 }}>
-                                        joinCode: <span className="badge">{p.joinCode}</span>
+                                        {p.joinCode ? (
+                                            <button
+                                                type="button"
+                                                className="count-pill count-pill--pink"
+                                                title="Copy join code"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    void copy(p.joinCode ?? '')
+                                                }}
+                                            >
+                                                {copied === p.joinCode ? 'Copied ✓' : `${p.joinCode} 📋`}
+                                            </button>
+                                        ) : (
+                                            <span className="project-card-date" />
+                                        )}
                                     </div>
                                 </div>
-
-                                <Link
-                                    to={`/projects/${p.id}`}
-                                    state={{ project: p, mode: 'student' as const }}
-                                    className="btn btn--primary"
-                                    style={{ height: 36, padding: '0 10px' }}
-                                >
-                                    Open →
-                                </Link>
-                            </div>
+                            ))}
                         </div>
-                    ))}
+                    )}
                 </div>
             </div>
-
-            <style>{`
-        @media (max-width: 980px) {
-          div[style*="grid-template-columns: '1fr 1fr'"] { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
         </div>
     )
+}
+
+function hash(s: string): number {
+    let h = 0
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+    return h
 }

@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage'
 import ProjectsPage from './pages/ProjectsPage'
 import ProjectPage from './pages/ProjectPage'
 import TaskPage from './pages/TaskPage'
+import MySubmissionPage from './pages/MySubmissionPage'
 import TaskSubmissionsPage from './pages/TaskSubmissionsPage'
 import GradeSubmissionPage from './pages/GradeSubmissionPage'
 import ProfilePage from './pages/ProfilePage'
@@ -25,7 +26,10 @@ export default function App() {
                     <Route path="/" element={<ProjectsPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/projects/:projectId" element={<ProjectPage />} />
+
                     <Route path="/projects/:projectId/tasks/:taskId" element={<TaskPage />} />
+                    <Route path="/projects/:projectId/tasks/:taskId/submission" element={<MySubmissionPage />} />
+
                     <Route path="/projects/:projectId/tasks/:taskId/submissions" element={<TaskSubmissionsPage />} />
                     <Route path="/projects/:projectId/tasks/:taskId/submissions/:submissionId" element={<GradeSubmissionPage />} />
                 </Route>

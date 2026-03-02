@@ -25,4 +25,8 @@ where t.projectId = :projectId
 """)
     int sumEarnedScore(@Param("projectId") Long projectId, @Param("studentId") Long studentId);
 
+    void deleteAllByTaskId(Long taskId);
+
+    void deleteAllByTaskIdIn(Collection<Long> taskIds);
+
 }

@@ -155,4 +155,34 @@ public class ProjectService {
         return new ProjectProgressResponse(projectId, earned, total);
     }
 
+    @Transactional
+    public void deleteProject(Long userId, Long projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found"));
+
+        if (!project.getOwnerId().equals(userId)) {
+            throw new ForbiddenException("Only owner can delete project");
+        }
+
+        List<Long> taskIds = taskRepository.findIdsByProjectId(projectId);
+        if (!taskIds.isEmpty()) {
+            submissionRepository.deleteAllByTaskIdIn(taskIds);
+        }
+        taskRepository.deleteAllByProjectId(projectId);
+        memberRepository.deleteAllByProjectId(projectId);
+        projectRepository.delete(project);
+    }
+
+    @Transactional
+    public void leaveProject(Long userId, Long projectId) {
+        ProjectMember member = memberRepository.findByProjectIdAndUserId(projectId, userId)
+                .orElseThrow(() -> new NotFoundException("Not a member of this project"));
+
+        if (ProjectRole.OWNER.equals(member.getRole())) {
+            throw new ForbiddenException("Owner cannot leave the project");
+        }
+
+        memberRepository.delete(member);
+    }
+
 }

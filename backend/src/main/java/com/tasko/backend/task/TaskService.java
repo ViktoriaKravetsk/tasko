@@ -4,6 +4,7 @@ import com.tasko.backend.exception.*;
 import com.tasko.backend.project.ProjectMember;
 import com.tasko.backend.project.ProjectMemberRepository;
 import com.tasko.backend.project.ProjectRole;
+import com.tasko.backend.submission.SubmissionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,7 @@ public class TaskService {
 
     private final TaskRepository taskRepository;
     private final ProjectMemberRepository memberRepository;
+    private final SubmissionRepository submissionRepository;
 
     @Transactional
     public TaskResponse create(Long userId, Long projectId, TaskCreateRequest req) {
@@ -96,6 +98,7 @@ public class TaskService {
         Task task = taskRepository.findByIdAndProjectId(taskId, projectId)
                 .orElseThrow(() -> new NotFoundException("Task not found"));
 
+        submissionRepository.deleteAllByTaskId(taskId);
         taskRepository.delete(task);
     }
 

@@ -33,4 +33,14 @@ export const projectsApi = {
             method: 'POST',
             body: JSON.stringify(body),
         }),
+
+    delete: (projectId: number) =>
+        api<void>(`/api/projects/${projectId}`, {
+            method: 'DELETE',
+        }),
+
+    leave: (projectId: number) =>
+        api<void>(`/api/projects/${projectId}/leave`, {
+            method: 'POST',
+        }),
 }

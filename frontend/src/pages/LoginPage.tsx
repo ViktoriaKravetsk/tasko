@@ -3,35 +3,45 @@ import { useAuth } from '../auth/AuthContext'
 export default function LoginPage() {
     const auth = useAuth()
 
-    if (!auth.isReady) {
-        return (
-            <div className="card">
-                <h1>Tasko</h1>
-                <div className="small">Loading…</div>
-            </div>
-        )
-    }
+    if (!auth.isReady) return <div className="page-wrap"><div className="panel"><div className="panel-body">Loading…</div></div></div>
 
     return (
-        <div style={{ maxWidth: 520, margin: '0 auto', paddingTop: 40 }}>
-            <div className="card">
-                <h1>Tasko</h1>
-                <div className="small" style={{ marginTop: 10 }}>
-                    Login
-                </div>
+        <>
+            <div className="bg-layer" aria-hidden="true">
+                <div className="cloud cl1" />
+                <div className="cloud cl2" />
+                <div className="cloud cl3" />
+                <div className="sun" />
+            </div>
 
-                <div className="card card--soft" style={{ marginTop: 14 }}>
-                    <div className="small">
-                        Sign in to view your projects, tasks, and courses.
+            <div className="flowers" aria-hidden="true">
+                <div className="flower f1"><div className="head" /><div className="stem" /></div>
+                <div className="flower f2"><div className="head" /><div className="stem" /></div>
+                <div className="flower f3"><div className="head" /><div className="stem" /></div>
+                <div className="flower f4"><div className="head" /><div className="stem" /></div>
+            </div>
+
+            <div className="page-wrap" style={{ minHeight: 'calc(100vh - 40px)', display: 'grid', placeItems: 'center' }}>
+                <div className="panel" style={{ width: 'min(420px, 92vw)' }}>
+                    <div className="panel-header">
+                        <div style={{ fontSize: 22 }}>✦</div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <h2 className="panel-title" style={{ margin: 0 }}>Привіт! 👋</h2>
+                            <div className="panel-sub">Увійди, щоб продовжити пригоду</div>
+                        </div>
+                    </div>
+
+                    <div className="panel-body" style={{ display: 'grid', gap: 14 }}>
+                        <button className="btn btn--primary" onClick={auth.loginWithGoogle} style={{ width: '100%' }}>
+                            Увійти через Google
+                        </button>
+
+                        <div style={{ textAlign: 'center', color: 'var(--muted)', fontWeight: 700, fontSize: '.85rem' }}>
+                            Реєструючись, ти погоджуєшся з Умовами та Приватністю
+                        </div>
                     </div>
                 </div>
-
-                <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <button className="btn btn--primary" onClick={auth.loginWithGoogle}>
-                        Login
-                    </button>
-                </div>
             </div>
-        </div>
+        </>
     )
 }

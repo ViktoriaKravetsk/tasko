@@ -20,4 +20,9 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     @Query("select coalesce(sum(t.maxScore), 0) from Task t where t.projectId = :projectId")
     int sumMaxScoreByProjectId(@Param("projectId") Long projectId);
 
+    @Query("select t.id from Task t where t.projectId = :projectId")
+    List<Long> findIdsByProjectId(@Param("projectId") Long projectId);
+
+    void deleteAllByProjectId(Long projectId);
+
 }

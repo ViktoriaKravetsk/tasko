@@ -20,4 +20,9 @@ export const tasksApi = {
             method: 'POST',
             body: JSON.stringify(body),
         }),
+
+    delete: (projectId: number, taskId: number) =>
+        api<void>(`/api/projects/${projectId}/tasks/${taskId}`, {
+            method: 'DELETE',
+        }),
 }
