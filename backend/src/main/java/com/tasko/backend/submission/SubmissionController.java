@@ -27,17 +27,6 @@ public class SubmissionController {
         return submissionService.upsertMy(principal.getUserId(), projectId, taskId, req);
     }
 
-    @PutMapping("/submissions/{submissionId}/grade")
-    public SubmissionResponse grade(
-            @AuthenticationPrincipal CurrentUser principal,
-            @PathVariable Long projectId,
-            @PathVariable Long taskId,
-            @PathVariable Long submissionId,
-            @Valid @RequestBody SubmissionGradeRequest req
-    ) {
-        return submissionService.grade(principal.getUserId(), projectId, taskId, submissionId, req);
-    }
-
     @GetMapping("/submission/me")
     public SubmissionResponse getMy(
             @AuthenticationPrincipal CurrentUser principal,
@@ -64,5 +53,26 @@ public class SubmissionController {
             @PathVariable Long submissionId
     ) {
         return submissionService.getForOwner(principal.getUserId(), projectId, taskId, submissionId);
+    }
+
+    @PutMapping("/submissions/{submissionId}/grade")
+    public SubmissionResponse grade(
+            @AuthenticationPrincipal CurrentUser principal,
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @PathVariable Long submissionId,
+            @Valid @RequestBody SubmissionGradeRequest req
+    ) {
+        return submissionService.grade(principal.getUserId(), projectId, taskId, submissionId, req);
+    }
+
+    @PostMapping("/submissions/{submissionId}/ai-evaluate")
+    public SubmissionResponse reEvaluateAi(
+            @AuthenticationPrincipal CurrentUser principal,
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @PathVariable Long submissionId
+    ) {
+        return submissionService.reEvaluateAi(principal.getUserId(), projectId, taskId, submissionId);
     }
 }

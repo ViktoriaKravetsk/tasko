@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import type { Submission, Task } from '../api/types'
 import { submissionsApi } from '../api/submissions.api'
@@ -8,20 +8,22 @@ type LocationState = { mode?: 'teacher' | 'student' }
 
 export default function GradeSubmissionPage() {
     const { projectId, taskId, submissionId } = useParams()
+
     const pid = Number(projectId)
     const tid = Number(taskId)
     const sid = Number(submissionId)
 
     const mode = ((useLocation().state as LocationState | null)?.mode ?? 'teacher') as 'teacher' | 'student'
-    const isTeacher = useMemo(() => mode === 'teacher', [mode])
 
     const [task, setTask] = useState<Task | null>(null)
-    const [sub, setSub] = useState<Submission | null>(null)
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
+    const [submission, setSubmission] = useState<Submission | null>(null)
 
     const [teacherScore, setTeacherScore] = useState<number>(0)
     const [teacherComment, setTeacherComment] = useState<string>('')
+
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
     async function load() {
         setLoading(true)
@@ -30,11 +32,11 @@ export default function GradeSubmissionPage() {
             const t = await tasksApi.get(pid, tid)
             setTask(t)
 
-            const full = await submissionsApi.getById(pid, tid, sid)
-            setSub(full)
+            const s = await submissionsApi.getById(pid, tid, sid)
+            setSubmission(s)
 
-            setTeacherScore(full.teacherScore ?? 0)
-            setTeacherComment(full.teacherComment ?? '')
+            setTeacherScore(s.teacherScore ?? 0)
+            setTeacherComment(s.teacherComment ?? '')
         } catch (e: any) {
             setError(e?.message ?? 'Failed to load')
         } finally {
@@ -42,141 +44,133 @@ export default function GradeSubmissionPage() {
         }
     }
 
-    async function onSave() {
-        if (!isTeacher || !task) return
+    async function onGrade() {
+        if (!task) return
+        setSaving(true)
         setError(null)
-
-        if (teacherScore < 0 || teacherScore > task.maxScore) {
-            setError(`Score must be between 0 and ${task.maxScore}`)
-            return
-        }
-
         try {
             const updated = await submissionsApi.grade(pid, tid, sid, {
-                teacherScore: Number(teacherScore),
-                teacherComment: teacherComment.trim() ? teacherComment.trim() : null,
+                teacherScore,
+                teacherComment: teacherComment.trim() || null,
             })
-            setSub(updated)
+            setSubmission(updated)
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to save grade')
+            setError(e?.message ?? 'Failed to grade')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    async function reEvaluateAi() {
+        setSaving(true)
+        setError(null)
+        try {
+            const updated = await submissionsApi.reEvaluateAi(pid, tid, sid)
+            setSubmission(updated)
+            await load()
+        } catch (e: any) {
+            setError(e?.message ?? 'Failed to re-evaluate AI')
+        } finally {
+            setSaving(false)
         }
     }
 
     useEffect(() => {
+        if (mode !== 'teacher') return
         void load()
-    }, [pid, tid, sid])
+    }, [pid, tid, sid, mode])
+
+    if (mode !== 'teacher') {
+        return (
+            <div className="card">
+                <h1>Not available</h1>
+                <div className="small">Only teachers can grade submissions.</div>
+            </div>
+        )
+    }
 
     return (
         <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                <Link to={`/projects/${pid}/tasks/${tid}/submissions`} state={{ mode }} className="btn btn--ghost">
-                    ← Back
-                </Link>
+            <Link to={`/projects/${pid}/tasks/${tid}/submissions`} state={{ mode }} className="btn btn--ghost">
+                ← Back
+            </Link>
 
-                <button className="btn" onClick={() => void load()} disabled={loading}>
-                    {loading ? 'Loading…' : 'Refresh'}
-                </button>
-            </div>
+            <h1 style={{ marginTop: 16 }}>Grade submission</h1>
+            {task && <div className="small">{task.title}</div>}
 
-            <div style={{ marginTop: 14 }}>
-                <h1>Grade submission</h1>
-                {task && sub ? (
-                    <div className="small">{task.title} • Student: {sub.studentName ?? 'Unknown'}</div>
-                ) : null}
-            </div>
+            {error && <div className="small" style={{ color: 'red' }}>{error}</div>}
+            {loading && <div className="small">Loading…</div>}
 
-            {error ? (
-                <div className="card card--soft" style={{ marginTop: 12 }}>
-                    <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 11 }}>Error</div>
-                    <div className="small">{error}</div>
-                </div>
-            ) : null}
-
-            {loading ? <div className="small" style={{ marginTop: 10 }}>Loading…</div> : null}
-
-            {task && sub ? (
-                <div style={{ marginTop: 12, display: 'grid', gap: 12 }}>
+            {submission && (
+                <div style={{ marginTop: 16, display: 'grid', gap: 20 }}>
                     <div className="card card--soft">
-                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                            <span className="badge">Task: {task.title}</span>
-                            <span className="badge badge--olive">Max: {task.maxScore}</span>
-                            <span className="badge">Student: {sub.studentName ?? 'Unknown'}</span>
-                            <span className="badge">Submitted: {sub.submittedAt ?? '—'}</span>
+                        <h2>Student work</h2>
+                        <div style={{ whiteSpace: 'pre-wrap' }}>
+                            {submission.textAnswer || '—'}
                         </div>
-
-                        <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-                            <div className="card" style={{ boxShadow: 'var(--shadow-sm)' }}>
-                                <h2>Text</h2>
-                                <div className="small" style={{ whiteSpace: 'pre-wrap' }}>
-                                    {sub.textAnswer ?? '—'}
-                                </div>
+                        {submission.fileLink && (
+                            <div>
+                                <a href={submission.fileLink} target="_blank" rel="noreferrer">
+                                    {submission.fileLink}
+                                </a>
                             </div>
-
-                            <div className="card" style={{ boxShadow: 'var(--shadow-sm)' }}>
-                                <h2>File link</h2>
-
-                                {sub.fileLink ? (
-                                    <a
-                                        href={sub.fileLink}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="btn btn--primary"
-                                        style={{
-                                            height: 36,
-                                            padding: '0 10px',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                        }}
-                                    >
-                                        Open link →
-                                    </a>
-                                ) : (
-                                    <div className="small">—</div>
-                                )}
-                            </div>
-                        </div>
+                        )}
                     </div>
 
-                    <div className="card">
-                        <h2>Teacher grade</h2>
+                    <div className="card card--soft">
+                        <h2>Teacher grading</h2>
 
-                        <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
-                            <input
-                                className="input"
-                                type="number"
-                                min={0}
-                                max={task.maxScore}
-                                value={teacherScore}
-                                onChange={(e) => setTeacherScore(Number(e.target.value))}
-                            />
+                        <input
+                            type="number"
+                            className="input"
+                            min={0}
+                            max={task?.maxScore ?? 100}
+                            value={teacherScore}
+                            onChange={(e) => setTeacherScore(Number(e.target.value))}
+                        />
 
-                            <textarea
-                                className="input"
-                                rows={4}
-                                placeholder="Teacher comment (optional)"
-                                value={teacherComment}
-                                onChange={(e) => setTeacherComment(e.target.value)}
-                            />
+                        <textarea
+                            className="input"
+                            placeholder="Teacher comment"
+                            value={teacherComment}
+                            onChange={(e) => setTeacherComment(e.target.value)}
+                        />
 
-                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                                <button className="btn btn--primary" onClick={onSave} disabled={!isTeacher}>
-                                    Save
-                                </button>
-                                <button
-                                    className="btn"
-                                    onClick={() => {
-                                        setTeacherScore(sub.teacherScore ?? 0)
-                                        setTeacherComment(sub.teacherComment ?? '')
-                                    }}
-                                    disabled={!isTeacher}
-                                >
-                                    Reset
-                                </button>
-                            </div>
+                        <button className="btn btn--primary" onClick={onGrade} disabled={saving}>
+                            {saving ? 'Saving…' : 'Save grade'}
+                        </button>
+                    </div>
+
+
+                    <div className="card card--soft">
+                        <h2>🤖 AI Evaluation</h2>
+
+                        {!submission.aiEvaluatedAt && (
+                            <div className="small">AI is evaluating...</div>
+                        )}
+
+                        {submission.aiEvaluatedAt && (
+                            <>
+                                <div>
+                                    AI suggested score: <strong>{submission.aiScore ?? 0}</strong>
+                                </div>
+
+                                {submission.aiComment && (
+                                    <div className="small" style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>
+                                        {submission.aiComment}
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        <div style={{ marginTop: 12 }}>
+                            <button className="btn" onClick={reEvaluateAi} disabled={saving}>
+                                🔁 Re-evaluate AI
+                            </button>
                         </div>
                     </div>
                 </div>
-            ) : null}
+            )}
         </div>
     )
 }

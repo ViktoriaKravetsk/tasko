@@ -32,4 +32,9 @@ export const submissionsApi = {
             method: 'PUT',
             body: JSON.stringify(body),
         }),
+
+    reEvaluateAi: (projectId: number, taskId: number, submissionId: number) =>
+        api<Submission>(`/api/projects/${projectId}/tasks/${taskId}/submissions/${submissionId}/ai-evaluate`, {
+            method: 'POST',
+        }),
 }

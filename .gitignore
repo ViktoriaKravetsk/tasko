@@ -39,3 +39,8 @@ out/
 frontend/src/App.jsx
 frontend/src/main.jsx
 frontend/vite.config.js
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride

@@ -49,8 +49,8 @@ export default function MySubmissionPage() {
         setError(null)
         try {
             const saved = await submissionsApi.submit(pid, tid, {
-                textAnswer: textAnswer.trim() ? textAnswer.trim() : null,
-                fileLink: fileLink.trim() ? fileLink.trim() : null,
+                textAnswer: textAnswer.trim() || null,
+                fileLink: fileLink.trim() || null,
             })
             setMySubmission(saved)
         } catch (e: any) {
@@ -70,89 +70,86 @@ export default function MySubmissionPage() {
             <div className="card">
                 <h1>Not available</h1>
                 <div className="small">Teachers don’t have “My submission”.</div>
-                <div style={{ marginTop: 12 }}>
-                    <Link to={`/projects/${pid}/tasks/${tid}`} state={{ mode }} className="btn btn--ghost">
-                        ← Back
-                    </Link>
-                </div>
             </div>
         )
     }
 
     return (
         <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Link to={`/projects/${pid}/tasks/${tid}`} state={{ mode }} className="btn btn--ghost">
-                    ← Back to task
+                    ← Back
                 </Link>
 
                 <button className="btn" onClick={() => void load()} disabled={loading || saving}>
-                    {loading ? 'Loading…' : 'Refresh'}
+                    Refresh
                 </button>
             </div>
 
-            <div style={{ marginTop: 14 }}>
-                <h1>My submission</h1>
-                {task ? <div className="small">{task.title}</div> : null}
-            </div>
+            <h1 style={{ marginTop: 16 }}>My submission</h1>
+            {task && <div className="small">{task.title}</div>}
 
-            {error ? (
-                <div className="card card--soft" style={{ marginTop: 12 }}>
-                    <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 11 }}>Error</div>
-                    <div className="small">{error}</div>
-                </div>
-            ) : null}
+            {error && <div className="small" style={{ color: 'red' }}>{error}</div>}
+            {loading && <div className="small">Loading…</div>}
 
-            {loading ? <div className="small" style={{ marginTop: 10 }}>Loading…</div> : null}
-
-            <div style={{ marginTop: 12, display: 'grid', gap: 12 }}>
+            <div style={{ marginTop: 16, display: 'grid', gap: 16 }}>
                 <div className="card card--soft">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <h2>Work</h2>
-                        <span className={submissionStatus === 'GRADED' ? 'badge badge--mint' : 'badge badge--pink'}>
-                            {submissionStatus}
-                        </span>
+                        <span>{submissionStatus}</span>
                     </div>
 
-                    <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
-                        <textarea
-                            className="input"
-                            placeholder="Text answer"
-                            value={textAnswer}
-                            onChange={(e) => setTextAnswer(e.target.value)}
-                        />
-                        <input
-                            className="input"
-                            placeholder="File link (optional)"
-                            value={fileLink}
-                            onChange={(e) => setFileLink(e.target.value)}
-                        />
+                    <textarea
+                        className="input"
+                        placeholder="Text answer"
+                        value={textAnswer}
+                        onChange={(e) => setTextAnswer(e.target.value)}
+                    />
 
-                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                            <button className="btn btn--primary" onClick={onSubmit} disabled={saving}>
-                                {saving ? 'Saving…' : mySubmission ? 'Update submission' : 'Submit'}
-                            </button>
-                            <button
-                                className="btn"
-                                onClick={() => {
-                                    setTextAnswer(mySubmission?.textAnswer ?? '')
-                                    setFileLink(mySubmission?.fileLink ?? '')
-                                }}
-                                disabled={saving}
-                            >
-                                Reset
-                            </button>
-                        </div>
-                    </div>
+                    <input
+                        className="input"
+                        placeholder="File link"
+                        value={fileLink}
+                        onChange={(e) => setFileLink(e.target.value)}
+                    />
+
+                    <button className="btn btn--primary" onClick={onSubmit} disabled={saving}>
+                        {saving ? 'Saving…' : mySubmission ? 'Update submission' : 'Submit'}
+                    </button>
                 </div>
 
                 <div className="card">
                     <h2>Status</h2>
-                    <div className="small" style={{ display: 'grid', gap: 6 }}>
+                    <div className="small">
                         <div>Submitted at: {mySubmission?.submittedAt ?? '—'}</div>
                         <div>Teacher score: {mySubmission?.teacherScore ?? '—'}</div>
-                        {mySubmission?.teacherComment ? <div>Teacher comment: {mySubmission.teacherComment}</div> : null}
+                        {mySubmission?.teacherComment && (
+                            <div>Teacher comment: {mySubmission.teacherComment}</div>
+                        )}
                     </div>
+                </div>
+
+                <div className="card card--soft">
+                    <h2>🤖 AI Evaluation</h2>
+
+                    {!mySubmission && <div className="small">No submission yet.</div>}
+
+                    {mySubmission && !mySubmission.aiEvaluatedAt && (
+                        <div className="small">AI is evaluating...</div>
+                    )}
+
+                    {mySubmission && mySubmission.aiEvaluatedAt && (
+                        <>
+                            <div>
+                                AI score: <strong>{mySubmission.aiScore ?? 0}</strong>
+                            </div>
+                            {mySubmission.aiComment && (
+                                <div className="small" style={{ whiteSpace: 'pre-wrap' }}>
+                                    {mySubmission.aiComment}
+                                </div>
+                            )}
+                        </>
+                    )}
                 </div>
             </div>
         </div>

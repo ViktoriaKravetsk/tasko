@@ -1,5 +1,6 @@
 package com.tasko.backend.submission;
 
+import com.tasko.backend.ai.AiEvaluationService;
 import com.tasko.backend.exception.BadRequestException;
 import com.tasko.backend.exception.ForbiddenException;
 import com.tasko.backend.exception.NotFoundException;
@@ -27,6 +28,8 @@ public class SubmissionService {
     private final ProjectMemberRepository memberRepository;
     private final UserRepository userRepository;
 
+    private final AiEvaluationService aiEvaluationService;
+
     @Transactional
     public SubmissionResponse upsertMy(Long userId, Long projectId, Long taskId, SubmissionUpsertRequest req) {
         requireStudent(projectId, userId);
@@ -46,7 +49,6 @@ public class SubmissionService {
         }
 
         boolean late = computeLate(task);
-
         Instant now = Instant.now();
 
         Submission submission = submissionRepository.findByTaskIdAndStudentId(taskId, userId)
@@ -55,6 +57,10 @@ public class SubmissionService {
                     existing.setFileLink(link);
                     existing.setSubmittedAt(now);
                     existing.setLate(late);
+                    existing.setAiScore(null);
+                    existing.setAiComment(null);
+                    existing.setAiEvaluatedAt(null);
+
                     return existing;
                 })
                 .orElseGet(() -> Submission.builder()
@@ -64,9 +70,15 @@ public class SubmissionService {
                         .fileLink(link)
                         .submittedAt(now)
                         .late(late)
+                        .aiScore(null)
+                        .aiComment(null)
+                        .aiEvaluatedAt(null)
                         .build());
 
         Submission saved = submissionRepository.save(submission);
+
+        aiEvaluationService.evaluateAsync(saved.getId());
+
         return toResponse(saved);
     }
 
@@ -140,6 +152,31 @@ public class SubmissionService {
                 .stream()
                 .map(this::toShort)
                 .toList();
+    }
+
+    @Transactional
+    public SubmissionResponse reEvaluateAi(Long userId, Long projectId, Long taskId, Long submissionId) {
+        requireOwner(projectId, userId);
+
+        taskRepository.findByIdAndProjectId(taskId, projectId)
+                .orElseThrow(() -> new NotFoundException("Task not found"));
+
+        Submission submission = submissionRepository.findById(submissionId)
+                .orElseThrow(() -> new NotFoundException("Submission not found"));
+
+        if (!submission.getTaskId().equals(taskId)) {
+            throw new BadRequestException("Submission does not belong to this task");
+        }
+
+        submission.setAiScore(null);
+        submission.setAiComment(null);
+        submission.setAiEvaluatedAt(null);
+
+        Submission saved = submissionRepository.save(submission);
+
+        aiEvaluationService.evaluateAsync(saved.getId());
+
+        return toResponse(saved);
     }
 
     private void requireStudent(Long projectId, Long userId) {
