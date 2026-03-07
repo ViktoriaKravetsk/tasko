@@ -26,7 +26,7 @@ export default function ProjectPage() {
     const [tTitle, setTTitle] = useState('')
     const [tDesc, setTDesc] = useState('')
     const [tDeadline, setTDeadline] = useState('')
-    const [tMaxScore, setTMaxScore] = useState<number>(100)
+    const [tMaxScore, setTMaxScore] = useState<number>(10)
     const [copied, setCopied] = useState(false)
 
     const emojis = useMemo(() => ['📚', '🎨', '🔬', '🚀', '💡', '🎯', '🌍', '🎵', '🖌️', '⚽', '🧠', '🔭'], [])
@@ -91,7 +91,6 @@ export default function ProjectPage() {
 
     useEffect(() => {
         void load()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [projectId])
 
     const createTask = async () => {
@@ -109,7 +108,7 @@ export default function ProjectPage() {
             setTTitle('')
             setTDesc('')
             setTDeadline('')
-            setTMaxScore(100)
+            setTMaxScore(10)
             await load()
             setTab('tasks')
         } catch (e: any) {

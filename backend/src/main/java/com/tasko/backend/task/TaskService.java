@@ -1,6 +1,7 @@
 package com.tasko.backend.task;
 
 import com.tasko.backend.exception.*;
+import com.tasko.backend.notification.NotificationService;
 import com.tasko.backend.project.ProjectMember;
 import com.tasko.backend.project.ProjectMemberRepository;
 import com.tasko.backend.project.ProjectRole;
@@ -20,6 +21,8 @@ public class TaskService {
     private final ProjectMemberRepository memberRepository;
     private final SubmissionRepository submissionRepository;
 
+    private final NotificationService notificationService;
+
     @Transactional
     public TaskResponse create(Long userId, Long projectId, TaskCreateRequest req) {
         requireOwner(projectId, userId);
@@ -36,6 +39,7 @@ public class TaskService {
                 .maxScore(req.maxScore())
                 .status(TaskStatus.TODO)
                 .build());
+        notificationService.taskCreated(saved.getId());
 
         return toResponse(saved);
     }

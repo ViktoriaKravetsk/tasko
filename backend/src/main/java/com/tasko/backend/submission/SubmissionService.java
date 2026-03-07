@@ -4,6 +4,7 @@ import com.tasko.backend.ai.AiEvaluationService;
 import com.tasko.backend.exception.BadRequestException;
 import com.tasko.backend.exception.ForbiddenException;
 import com.tasko.backend.exception.NotFoundException;
+import com.tasko.backend.notification.NotificationService;
 import com.tasko.backend.project.ProjectMember;
 import com.tasko.backend.project.ProjectMemberRepository;
 import com.tasko.backend.project.ProjectRole;
@@ -29,6 +30,7 @@ public class SubmissionService {
     private final UserRepository userRepository;
 
     private final AiEvaluationService aiEvaluationService;
+    private final NotificationService notificationService;
 
     @Transactional
     public SubmissionResponse upsertMy(Long userId, Long projectId, Long taskId, SubmissionUpsertRequest req) {
@@ -121,6 +123,9 @@ public class SubmissionService {
         submission.setGradedAt(Instant.now());
 
         Submission saved = submissionRepository.save(submission);
+
+        notificationService.submissionGraded(saved.getId());
+
         return toResponse(saved);
     }
 

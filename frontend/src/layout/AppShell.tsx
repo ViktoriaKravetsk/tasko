@@ -1,28 +1,30 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
+import { BackgroundDecor } from './BackgroundDecor'
 import './shell-retro.css'
 
-type Particle = {
+type Petal = {
     x: number
     y: number
     vx: number
     vy: number
-    life: number
-    emoji: string
-    size: number
     rot: number
-    rotv: number
+    vrot: number
+    life: number
+    size: number
+    color: string
+    kind: 'petal' | 'flower'
 }
 
-const EMOJIS = ['⭐', '🌸', '✦', '★', '💛', '🌼', '✿', '🌿']
+const COLORS = ['#f3a8c8', '#f6d67a', '#bfa2f3', '#98d4ef', '#abd99b', '#f7c4a8']
 
 export default function AppShell() {
     const auth = useAuth()
     const [open, setOpen] = useState(false)
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
-    const particlesRef = useRef<Particle[]>([])
+    const petalsRef = useRef<Petal[]>([])
     const rafRef = useRef<number | null>(null)
 
     useEffect(() => {
@@ -36,125 +38,109 @@ export default function AppShell() {
     useEffect(() => {
         const canvas = canvasRef.current
         if (!canvas) return
+
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
         const resize = () => {
-            canvas.width = window.innerWidth
-            canvas.height = window.innerHeight
+            const ratio = window.devicePixelRatio || 1
+            canvas.width = Math.floor(window.innerWidth * ratio)
+            canvas.height = Math.floor(window.innerHeight * ratio)
+            canvas.style.width = `${window.innerWidth}px`
+            canvas.style.height = `${window.innerHeight}px`
+            ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
         }
+
         resize()
         window.addEventListener('resize', resize)
 
-        const spawn = (x: number, y: number, n: number) => {
-            for (let i = 0; i < n; i++) {
-                const angle = (Math.PI * 2 * i) / n + (Math.random() - 0.5) * 0.7
-                const speed = 2 + Math.random() * 4
-                particlesRef.current.push({
+        const spawnFlowers = (x: number, y: number, count: number) => {
+            for (let i = 0; i < count; i++) {
+                petalsRef.current.push({
                     x,
                     y,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed - 2,
-                    life: 1,
-                    emoji: EMOJIS[Math.floor(Math.random() * EMOJIS.length)],
-                    size: 12 + Math.random() * 10,
+                    vx: (Math.random() - 0.5) * 2.6,
+                    vy: -1.5 - Math.random() * 2.2,
                     rot: Math.random() * Math.PI * 2,
-                    rotv: (Math.random() - 0.5) * 0.22,
+                    vrot: (Math.random() - 0.5) * 0.18,
+                    life: 1,
+                    size: 5 + Math.random() * 7,
+                    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+                    kind: Math.random() > 0.7 ? 'flower' : 'petal',
                 })
             }
         }
 
-        const onClick = (e: MouseEvent) => {
+        const onPointer = (e: MouseEvent) => {
             const target = e.target as HTMLElement | null
             if (!target) return
             if (target.closest('input,textarea,button,a,[role="button"],.drawer')) return
-            spawn(e.clientX, e.clientY, 10)
+            spawnFlowers(e.clientX, e.clientY, 14)
         }
-        window.addEventListener('click', onClick)
 
-        const animate = () => {
-            const w = canvas.width
-            const h = canvas.height
-            ctx.clearRect(0, 0, w, h)
+        window.addEventListener('click', onPointer)
 
-            const ps = particlesRef.current.filter((p) => p.life > 0)
-            particlesRef.current = ps
+        const drawPetal = (p: Petal) => {
+            ctx.save()
+            ctx.translate(p.x, p.y)
+            ctx.rotate(p.rot)
+            ctx.globalAlpha = p.life
 
-            for (const p of ps) {
-                ctx.save()
-                ctx.globalAlpha = p.life
-                ctx.font = `${p.size}px serif`
-                ctx.translate(p.x, p.y)
-                ctx.rotate(p.rot)
-                ctx.fillText(p.emoji, -p.size / 2, p.size / 2)
-                ctx.restore()
+            if (p.kind === 'flower') {
+                for (let i = 0; i < 5; i++) {
+                    ctx.save()
+                    ctx.rotate((Math.PI * 2 * i) / 5)
+                    ctx.fillStyle = p.color
+                    ctx.beginPath()
+                    ctx.ellipse(0, -p.size * 0.9, p.size * 0.55, p.size * 0.9, 0, 0, Math.PI * 2)
+                    ctx.fill()
+                    ctx.restore()
+                }
+
+                ctx.fillStyle = '#f8e7a1'
+                ctx.beginPath()
+                ctx.arc(0, 0, p.size * 0.42, 0, Math.PI * 2)
+                ctx.fill()
+            } else {
+                ctx.fillStyle = p.color
+                ctx.beginPath()
+                ctx.ellipse(0, 0, p.size * 0.65, p.size, 0, 0, Math.PI * 2)
+                ctx.fill()
+            }
+
+            ctx.restore()
+        }
+
+        const render = () => {
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
+
+            petalsRef.current = petalsRef.current.filter((p) => p.life > 0)
+
+            for (const p of petalsRef.current) {
+                drawPetal(p)
 
                 p.x += p.vx
                 p.y += p.vy
-                p.vy += 0.19
-                p.life -= 0.026
-                p.rot += p.rotv
+                p.vy += 0.045
+                p.rot += p.vrot
+                p.life -= 0.018
             }
 
-            rafRef.current = window.requestAnimationFrame(animate)
+            rafRef.current = window.requestAnimationFrame(render)
         }
 
-        rafRef.current = window.requestAnimationFrame(animate)
+        rafRef.current = window.requestAnimationFrame(render)
 
         return () => {
             window.removeEventListener('resize', resize)
-            window.removeEventListener('click', onClick)
+            window.removeEventListener('click', onPointer)
             if (rafRef.current) window.cancelAnimationFrame(rafRef.current)
         }
     }, [])
 
     return (
         <div className={open ? 'shell shell--open' : 'shell'}>
-            {/* background decor (хмарки/сонце) */}
-            <div className="bg-layer" aria-hidden="true">
-                <div className="cloud cl1" />
-                <div className="cloud cl2" />
-                <div className="cloud cl3" />
-                <div className="cloud cl4" />
-                <div className="sun" />
-            </div>
-
-            {/* flowers */}
-            <div className="flowers" aria-hidden="true">
-                <div className="flower f1">
-                    <div className="head" />
-                    <div className="stem" />
-                </div>
-                <div className="flower f2">
-                    <div className="head" />
-                    <div className="stem" />
-                </div>
-                <div className="flower f3">
-                    <div className="head" />
-                    <div className="stem" />
-                </div>
-                <div className="flower f4">
-                    <div className="head" />
-                    <div className="stem" />
-                </div>
-                <div className="flower f5">
-                    <div className="head" />
-                    <div className="stem" />
-                </div>
-                <div className="flower f6">
-                    <div className="head" />
-                    <div className="stem" />
-                </div>
-                <div className="flower f7">
-                    <div className="head" />
-                    <div className="stem" />
-                </div>
-                <div className="flower f8">
-                    <div className="head" />
-                    <div className="stem" />
-                </div>
-            </div>
-
+            <BackgroundDecor />
             <canvas ref={canvasRef} id="sparkleCanvas" />
 
             <header className="topbar">
@@ -165,12 +151,11 @@ export default function AppShell() {
 
                     <div className="brand">
                         <div className="brand__logo">T</div>
-                        <div>
-                            <div className="brand__name">Tasko</div>
-                            <div className="brand__tag">place where your projects live</div>
-                        </div>
+                        <div className="brand__name">Tasko</div>
                     </div>
                 </div>
+
+                <div className="topbar__center" />
 
                 <div className="user">
                     {auth.me?.avatarUrl ? (
@@ -178,13 +163,14 @@ export default function AppShell() {
                     ) : (
                         <div className="user__avatar user__avatar--fallback">🙂</div>
                     )}
+
                     <div className="user__meta">
                         <div className="user__name">{auth.me?.name ?? 'User'}</div>
                         <div className="user__email">{auth.me?.email ?? ''}</div>
                     </div>
 
                     <button className="iconbtn" onClick={() => auth.logout()} aria-label="Logout">
-                        ⎋
+                        ↻
                     </button>
                 </div>
             </header>
@@ -195,7 +181,7 @@ export default function AppShell() {
                 <div className="drawer__head">
                     <div className="drawer__title">MENU</div>
                     <button className="iconbtn" onClick={() => setOpen(false)} aria-label="Close menu">
-                        ✖
+                        ✕
                     </button>
                 </div>
 
@@ -214,8 +200,6 @@ export default function AppShell() {
                 <button className="navlink" onClick={() => auth.logout()}>
                     🚪 LOGOUT
                 </button>
-
-                <div className="drawer__hint">Retro sky • flowers • sparkles</div>
             </aside>
 
             <main className="content">

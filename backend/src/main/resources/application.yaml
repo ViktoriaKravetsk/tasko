@@ -29,6 +29,18 @@ spring:
             client-secret: ${GOOGLE_CLIENT_SECRET}
             scope: openid, profile, email
 
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 logging:
   level:
     org.springframework.security: DEBUG
@@ -47,3 +59,8 @@ tasko:
     model: gpt-4o-mini
     base-url: https://api.openai.com/v1
     timeout-seconds: 30
+
+  mail:
+    enabled: ${TASKO_MAIL_ENABLED:false}
+    from: ${MAIL_FROM:${MAIL_USERNAME:}}
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
