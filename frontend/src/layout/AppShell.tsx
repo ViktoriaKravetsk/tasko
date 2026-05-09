@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { BackgroundDecor } from './BackgroundDecor'
@@ -21,6 +21,7 @@ const COLORS = ['#f3a8c8', '#f6d67a', '#bfa2f3', '#98d4ef', '#abd99b', '#f7c4a8'
 
 export default function AppShell() {
     const auth = useAuth()
+    const navigate = useNavigate()
     const [open, setOpen] = useState(false)
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -31,6 +32,7 @@ export default function AppShell() {
         const onKey = (e: KeyboardEvent) => {
             if (e.key === 'Escape') setOpen(false)
         }
+
         window.addEventListener('keydown', onKey)
         return () => window.removeEventListener('keydown', onKey)
     }, [])
@@ -55,7 +57,7 @@ export default function AppShell() {
         window.addEventListener('resize', resize)
 
         const spawnFlowers = (x: number, y: number, count: number) => {
-            for (let i = 0; i < count; i++) {
+            for (let i = 0; i < count; i += 1) {
                 petalsRef.current.push({
                     x,
                     y,
@@ -87,7 +89,7 @@ export default function AppShell() {
             ctx.globalAlpha = p.life
 
             if (p.kind === 'flower') {
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 5; i += 1) {
                     ctx.save()
                     ctx.rotate((Math.PI * 2 * i) / 5)
                     ctx.fillStyle = p.color
@@ -118,7 +120,6 @@ export default function AppShell() {
 
             for (const p of petalsRef.current) {
                 drawPetal(p)
-
                 p.x += p.vx
                 p.y += p.vy
                 p.vy += 0.045
@@ -138,6 +139,11 @@ export default function AppShell() {
         }
     }, [])
 
+    const goToProfile = () => {
+        setOpen(false)
+        navigate('/profile')
+    }
+
     return (
         <div className={open ? 'shell shell--open' : 'shell'}>
             <BackgroundDecor />
@@ -151,26 +157,40 @@ export default function AppShell() {
 
                     <div className="brand">
                         <div className="brand__logo">T</div>
-                        <div className="brand__name">Tasko</div>
+
+                        <button
+                            type="button"
+                            className="brand__name brand__name-link"
+                            onClick={() => {
+                                setOpen(false)
+                                navigate('/projects')
+                            }}
+                            aria-label="Go to home page"
+                        >
+                            Tasko
+                        </button>
                     </div>
                 </div>
 
                 <div className="topbar__center" />
 
                 <div className="user">
-                    {auth.me?.avatarUrl ? (
-                        <img className="user__avatar" src={auth.me.avatarUrl} alt="avatar" />
-                    ) : (
-                        <div className="user__avatar user__avatar--fallback">🙂</div>
-                    )}
+                    <button
+                        type="button"
+                        className="user__profile-link"
+                        onClick={goToProfile}
+                        aria-label="Редагувати профіль"
+                    >
+                        {auth.me?.avatarUrl ? (
+                            <img className="user__avatar" src={auth.me.avatarUrl} alt="avatar" />
+                        ) : (
+                            <span className="user__avatar user__avatar--fallback">🙂</span>
+                        )}
 
-                    <div className="user__meta">
-                        <div className="user__name">{auth.me?.name ?? 'User'}</div>
-                        <div className="user__email">{auth.me?.email ?? ''}</div>
-                    </div>
-
-                    <button className="iconbtn" onClick={() => auth.logout()} aria-label="Logout">
-                        ↻
+                        <span className="user__meta">
+            <span className="user__name">{auth.me?.name ?? 'User'}</span>
+            <span className="user__email">{auth.me?.email ?? ''}</span>
+        </span>
                     </button>
                 </div>
             </header>
@@ -185,20 +205,41 @@ export default function AppShell() {
                     </button>
                 </div>
 
-                <NavLink to="/" className={({ isActive }) => (isActive ? 'navlink navlink--active' : 'navlink')} onClick={() => setOpen(false)}>
-                    🏠 PROJECTS
+                <NavLink
+                    to="/projects"
+                    className={({ isActive }) => (isActive ? 'navlink navlink--active' : 'navlink')}
+                    onClick={() => setOpen(false)}
+                >
+                    🏠 Projects
                 </NavLink>
+
+                <NavLink
+                    to="/projects/mine"
+                    className={({ isActive }) => (isActive ? 'navlink navlink--active' : 'navlink')}
+                    onClick={() => setOpen(false)}
+                >
+                    📁 My Projects
+                </NavLink>
+
+                <NavLink
+                    to="/projects/enrolled"
+                    className={({ isActive }) => (isActive ? 'navlink navlink--active' : 'navlink')}
+                    onClick={() => setOpen(false)}
+                >
+                    🎒 Participating Projects
+                </NavLink>
+
 
                 <NavLink
                     to="/profile"
                     className={({ isActive }) => (isActive ? 'navlink navlink--active' : 'navlink')}
                     onClick={() => setOpen(false)}
                 >
-                    👤 PROFILE
+                    👤 Profile
                 </NavLink>
 
                 <button className="navlink" onClick={() => auth.logout()}>
-                    🚪 LOGOUT
+                    🚪 Logout
                 </button>
             </aside>
 

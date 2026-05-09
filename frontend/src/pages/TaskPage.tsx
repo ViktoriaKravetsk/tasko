@@ -1,40 +1,74 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import type { Task, Submission } from '../api/types'
-import { tasksApi } from '../api/tasks.api'
+import type { Submission, Task } from '../api/types'
 import { submissionsApi } from '../api/submissions.api'
+import { tasksApi } from '../api/tasks.api'
 
-type LocationState = { mode?: 'teacher' | 'student' }
+type Mode = 'teacher' | 'student'
+type LocationState = { mode?: Mode }
 
 export default function TaskPage() {
     const { projectId, taskId } = useParams()
-    const pid = Number(projectId)
-    const tid = Number(taskId)
 
-    const mode = ((useLocation().state as LocationState | null)?.mode ?? 'student') as 'teacher' | 'student'
+    const pid = projectId ? Number(projectId) : NaN
+    const tid = taskId ? Number(taskId) : NaN
+
+    const mode = ((useLocation().state as LocationState | null)?.mode ?? 'student') as Mode
     const isTeacher = useMemo(() => mode === 'teacher', [mode])
 
     const [task, setTask] = useState<Task | null>(null)
     const [mySubmission, setMySubmission] = useState<Submission | null>(null)
+
+    const [textAnswer, setTextAnswer] = useState('')
+    const [fileLink, setFileLink] = useState('')
+
     const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [success, setSuccess] = useState<string | null>(null)
 
     const submissionStatus =
         mySubmission == null ? 'NOT_SUBMITTED' : mySubmission.teacherScore == null ? 'SUBMITTED' : 'GRADED'
 
     async function load() {
+        if (!Number.isFinite(pid) || !Number.isFinite(tid)) {
+            setError('Invalid task link')
+            setLoading(false)
+            return
+        }
+
         setLoading(true)
         setError(null)
+        setSuccess(null)
+
         try {
-            const t = await tasksApi.get(pid, tid)
-            setTask(t)
+            const loadedTask = await tasksApi.get(pid, tid)
+            setTask(loadedTask)
 
             if (!isTeacher) {
-                const s = await submissionsApi.my(pid, tid)
-                setMySubmission(s)
+                try {
+                    const loadedSubmission = await submissionsApi.my(pid, tid)
+
+                    setMySubmission(loadedSubmission)
+                    setTextAnswer(loadedSubmission?.textAnswer ?? '')
+                    setFileLink(loadedSubmission?.fileLink ?? '')
+                } catch (e: any) {
+                    if (e?.status === 404) {
+                        setMySubmission(null)
+                        setTextAnswer('')
+                        setFileLink('')
+                        return
+                    }
+
+                    throw e
+                }
+            } else {
+                setMySubmission(null)
+                setTextAnswer('')
+                setFileLink('')
             }
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to load task')
+            setError(e?.message ?? e?.response?.data?.message ?? 'Failed to load task')
         } finally {
             setLoading(false)
         }
@@ -44,78 +78,252 @@ export default function TaskPage() {
         void load()
     }, [pid, tid, isTeacher])
 
+    async function submitAnswer() {
+        if (!Number.isFinite(pid) || !Number.isFinite(tid)) return
+
+        const normalizedTextAnswer = textAnswer.trim()
+        const normalizedFileLink = fileLink.trim()
+
+        if (!normalizedTextAnswer && !normalizedFileLink) {
+            setError('Write an answer or add a file link before submitting.')
+            return
+        }
+
+        setSaving(true)
+        setError(null)
+        setSuccess(null)
+
+        try {
+            const savedSubmission = await submissionsApi.submit(pid, tid, {
+                textAnswer: normalizedTextAnswer || null,
+                fileLink: normalizedFileLink || null,
+            })
+
+            setMySubmission(savedSubmission)
+            setTextAnswer(savedSubmission.textAnswer ?? normalizedTextAnswer)
+            setFileLink(savedSubmission.fileLink ?? normalizedFileLink)
+            setSuccess(mySubmission ? 'Submission updated.' : 'Submission sent.')
+        } catch (e: any) {
+            setError(e?.message ?? e?.response?.data?.message ?? 'Failed to submit answer')
+        } finally {
+            setSaving(false)
+        }
+    }
+
     return (
-        <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                <Link to={`/projects/${pid}`} state={{ mode }} className="btn btn--ghost">
+        <div className="page-wrap page-stack">
+            <div className="section-top section-top--with-links">
+                <Link
+                    to={`/projects/${pid}`}
+                    state={{ mode }}
+                    className="btn btn--ghost"
+                    style={{ textDecoration: 'none' }}
+                >
                     ← Back to project
                 </Link>
 
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <button className="btn" onClick={() => void load()} disabled={loading}>
+                <div className="section-actions">
+                    <button
+                        className="btn"
+                        onClick={() => void load()}
+                        disabled={loading || saving}
+                        type="button"
+                    >
                         {loading ? 'Loading…' : 'Refresh'}
                     </button>
 
                     {isTeacher ? (
-                        <Link to={`/projects/${pid}/tasks/${tid}/submissions`} state={{ mode }} className="btn btn--primary">
+                        <Link
+                            to={`/projects/${pid}/tasks/${tid}/submissions`}
+                            state={{ mode }}
+                            className="btn btn--primary"
+                            style={{ textDecoration: 'none' }}
+                        >
                             Review submissions →
                         </Link>
-                    ) : (
-                        <Link to={`/projects/${pid}/tasks/${tid}/submission`} state={{ mode }} className="btn btn--primary">
-                            Open my submission →
-                        </Link>
-                    )}
+                    ) : null}
                 </div>
             </div>
 
             {error ? (
-                <div className="card card--soft" style={{ marginTop: 12 }}>
-                    <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 11 }}>Error</div>
-                    <div className="small">{error}</div>
+                <div className="alert alert--error">
+                    {error}
                 </div>
             ) : null}
 
-            {loading ? <div className="small" style={{ marginTop: 10 }}>Loading…</div> : null}
+            {success ? (
+                <div className="alert">
+                    {success}
+                </div>
+            ) : null}
+
+            {loading ? (
+                <div className="empty">
+                    <div className="empty-icon">⏳</div>
+                    <div className="empty-text">Loading…</div>
+                </div>
+            ) : null}
 
             {task ? (
-                <div style={{ marginTop: 14, display: 'grid', gap: 12 }}>
-                    <div className="card card--soft">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                            <div>
-                                <h1>{task.title}</h1>
-                                {task.description ? <div className="small">{task.description}</div> : null}
-                            </div>
+                <>
+                    <section className="panel">
+                        <div className="panel-body">
+                            <div className="task-detail-layout">
+                                <div>
+                                    <h1 className="task-detail-title">{task.title}</h1>
 
-                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                {task.deadline ? <span className="badge badge--blue">Deadline: {task.deadline}</span> : null}
-                                <span className="badge">Max: {task.maxScore}</span>
+                                    <p className="task-detail-description">
+                                        {task.description || 'No description'}
+                                    </p>
+                                </div>
+
+                                <div className="task-detail-side">
+                                    <span className="meta-pill">
+                                        📅 {task.deadline || 'No deadline'}
+                                    </span>
+
+                                    <span className="meta-pill">
+                                        Max: {task.maxScore}
+                                    </span>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
                     {!isTeacher ? (
-                        <div className="card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                                <h2>Your submission</h2>
-                                <span className={submissionStatus === 'GRADED' ? 'badge badge--mint' : 'badge badge--pink'}>
-                                    {submissionStatus}
-                                </span>
-                            </div>
+                        <section className="panel">
+                            <div className="panel-body">
+                                <div
+                                    className="section-top section-top--with-links"
+                                    style={{ marginBottom: 18 }}
+                                >
+                                    <div>
+                                        <h2 style={{ margin: 0 }}>Your submission</h2>
+                                        <div className="panel-sub">
+                                            Write your answer, then submit it to your teacher.
+                                        </div>
+                                    </div>
 
-                            <div className="small" style={{ display: 'grid', gap: 6, marginTop: 10 }}>
-                                <div>Submitted at: {mySubmission?.submittedAt ?? '—'}</div>
-                                <div>Teacher score: {mySubmission?.teacherScore ?? '—'}</div>
-                            </div>
+                                    <span
+                                        className={
+                                            submissionStatus === 'GRADED'
+                                                ? 'badge badge--mint'
+                                                : 'badge badge--pink'
+                                        }
+                                    >
+                                        {submissionStatus}
+                                    </span>
+                                </div>
 
-                            <div style={{ marginTop: 12 }}>
-                                <Link to={`/projects/${pid}/tasks/${tid}/submission`} state={{ mode }} className="btn btn--primary">
-                                    Edit / View my submission →
-                                </Link>
+                                <label className="tasko-field">
+                                    <span>Text answer</span>
+                                    <textarea
+                                        className="inp submission-textarea"
+                                        value={textAnswer}
+                                        onChange={(e) => setTextAnswer(e.target.value)}
+                                        placeholder="Write your answer here..."
+                                        disabled={loading || saving}
+                                    />
+                                </label>
+
+                                <label className="tasko-field" style={{ marginTop: 14 }}>
+                                    <span>File link</span>
+                                    <input
+                                        className="inp"
+                                        value={fileLink}
+                                        onChange={(e) => setFileLink(e.target.value)}
+                                        placeholder="Paste a file link here..."
+                                        disabled={loading || saving}
+                                    />
+                                </label>
+
+                                <div className="submission-actions">
+                                    <button
+                                        className="btn btn--primary"
+                                        type="button"
+                                        onClick={submitAnswer}
+                                        disabled={loading || saving || (!textAnswer.trim() && !fileLink.trim())}
+                                    >
+                                        {saving
+                                            ? 'Saving…'
+                                            : mySubmission
+                                                ? 'Update submission →'
+                                                : 'Submit answer →'}
+                                    </button>
+                                </div>
+
+                                <div className="submission-meta">
+                                    <div>Submitted at: {formatDateTime(mySubmission?.submittedAt)}</div>
+
+                                    <div>Teacher score: {mySubmission?.teacherScore ?? '—'}</div>
+                                    <div>Teacher comment: {mySubmission?.teacherComment ?? '—'}</div>
+
+                                    <div>AI score: {getAiScore(mySubmission)}</div>
+                                    <div>AI comment: {getAiComment(mySubmission)}</div>
+                                </div>
                             </div>
-                        </div>
+                        </section>
                     ) : null}
-                </div>
+                </>
             ) : null}
         </div>
+    )
+}
+
+function formatDateTime(value?: string | null) {
+    if (!value) return '—'
+
+    const date = new Date(value)
+
+    if (Number.isNaN(date.getTime())) {
+        return value
+    }
+
+    return new Intl.DateTimeFormat('uk-UA', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(date)
+}
+
+function getAiScore(submission: Submission | null) {
+    if (!submission) return '—'
+
+    const s = submission as any
+
+    return (
+        s.aiScore ??
+        s.ai_score ??
+        s.aiGrade ??
+        s.ai_grade ??
+        s.aiEvaluationScore ??
+        s.ai_evaluation_score ??
+        s.aiMark ??
+        s.ai_mark ??
+        s.aiTeacherScore ??
+        s.ai_teacher_score ??
+        '—'
+    )
+}
+
+function getAiComment(submission: Submission | null) {
+    if (!submission) return '—'
+
+    const s = submission as any
+
+    return (
+        s.aiComment ??
+        s.ai_comment ??
+        s.aiFeedback ??
+        s.ai_feedback ??
+        s.aiEvaluation ??
+        s.ai_evaluation ??
+        s.aiExplanation ??
+        s.ai_explanation ??
+        s.aiTeacherComment ??
+        s.ai_teacher_comment ??
+        '—'
     )
 }

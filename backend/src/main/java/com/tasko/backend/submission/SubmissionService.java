@@ -147,14 +147,19 @@ public class SubmissionService {
     }
 
     @Transactional(readOnly = true)
-    public List<SubmissionShortResponse> listForOwner(Long userId, Long projectId, Long taskId) {
+    public List<SubmissionShortResponse> listForOwner(Long userId, Long projectId, Long taskId, String search) {
         requireOwner(projectId, userId);
 
         taskRepository.findByIdAndProjectId(taskId, projectId)
                 .orElseThrow(() -> new NotFoundException("Task not found"));
 
-        return submissionRepository.findAllByTaskIdOrderBySubmittedAtDesc(taskId)
-                .stream()
+        String normalizedSearch = normalizeSearch(search);
+
+        List<Submission> submissions = normalizedSearch == null
+                ? submissionRepository.findByTaskIdForOwner(taskId)
+                : submissionRepository.findByTaskIdForOwnerAndSearch(taskId, normalizedSearch);
+
+        return submissions.stream()
                 .map(this::toShort)
                 .toList();
     }
@@ -210,6 +215,12 @@ public class SubmissionService {
     private String trimToNull(String s) {
         if (s == null) return null;
         String v = s.trim();
+        return v.isBlank() ? null : v;
+    }
+
+    private String normalizeSearch(String value) {
+        if (value == null) return null;
+        String v = value.trim();
         return v.isBlank() ? null : v;
     }
 

@@ -29,9 +29,11 @@ public class TaskController {
     @GetMapping
     public List<TaskShortResponse> list(
             @AuthenticationPrincipal CurrentUser principal,
-            @PathVariable Long projectId
+            @PathVariable Long projectId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "ALL") TaskDeadlineFilter deadlineFilter
     ) {
-        return taskService.list(principal.getUserId(), projectId);
+        return taskService.list(principal.getUserId(), projectId, search, deadlineFilter);
     }
 
     @GetMapping("/{taskId}")

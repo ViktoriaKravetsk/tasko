@@ -8,7 +8,7 @@ export default function LoginPage() {
         return (
             <div className="page-wrap login-screen">
                 <div className="panel login-panel">
-                    <div className="panel-body">Loading…</div>
+                    <div className="panel-body">Loading...</div>
                 </div>
             </div>
         )
@@ -21,19 +21,23 @@ export default function LoginPage() {
             <div className="page-wrap login-screen">
                 <div className="panel login-panel">
                     <div className="panel-header login-panel__header">
-                        <div className="login-panel__star">✦</div>
-                        <div>
-                            <h2 className="panel-title login-panel__title">Привіт! 👋</h2>
-                            <div className="panel-sub">Увійди, щоб продовжити пригоду</div>
+                        <div className="login-panel__title-row">
+                            <span className="login-panel__star">✦</span>
+                            <h2 className="panel-title login-panel__title">Welcome! 👋</h2>
+                        </div>
+
+                        <div className="panel-sub login-panel__subtitle">
+                            Sign in to continue work
                         </div>
                     </div>
 
                     <div className="panel-body login-panel__body">
-                        <button className="btn btn--primary login-panel__button" onClick={auth.loginWithGoogle}>
-                            Увійти через Google
+                        <button
+                            className="btn btn--primary login-panel__button"
+                            onClick={auth.loginWithGoogle}
+                        >
+                            Sign in with Google
                         </button>
-
-
                     </div>
                 </div>
             </div>

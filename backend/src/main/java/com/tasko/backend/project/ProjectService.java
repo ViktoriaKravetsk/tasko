@@ -1,6 +1,9 @@
 package com.tasko.backend.project;
 
-import com.tasko.backend.exception.*;
+import com.tasko.backend.exception.BadRequestException;
+import com.tasko.backend.exception.ForbiddenException;
+import com.tasko.backend.exception.InternalException;
+import com.tasko.backend.exception.NotFoundException;
 import com.tasko.backend.submission.SubmissionRepository;
 import com.tasko.backend.task.TaskRepository;
 import lombok.RequiredArgsConstructor;
@@ -54,9 +57,14 @@ public class ProjectService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProjectResponse> listMy(Long ownerId) {
-        return projectRepository.findByOwnerIdOrderByCreatedAtDesc(ownerId)
-                .stream()
+    public List<ProjectResponse> listMy(Long ownerId, String search) {
+        String normalizedSearch = normalizeSearch(search);
+
+        List<Project> projects = normalizedSearch == null
+                ? projectRepository.findByOwnerIdOrderByCreatedAtDesc(ownerId)
+                : projectRepository.findByOwnerIdAndNameContainingIgnoreCaseOrderByCreatedAtDesc(ownerId, normalizedSearch);
+
+        return projects.stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -93,17 +101,14 @@ public class ProjectService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProjectResponse> listEnrolled(Long userId) {
-        List<Long> projectIds = memberRepository.findAllByUserId(userId).stream()
-                .filter(m -> ProjectRole.STUDENT.equals(m.getRole()))
-                .map(ProjectMember::getProjectId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
+    public List<ProjectResponse> listEnrolled(Long userId, String search) {
+        String normalizedSearch = normalizeSearch(search);
 
-        if (projectIds.isEmpty()) return List.of();
+        List<Project> projects = normalizedSearch == null
+                ? memberRepository.findStudentProjects(userId)
+                : memberRepository.findStudentProjectsBySearch(userId, normalizedSearch);
 
-        return projectRepository.findAllById(projectIds).stream()
+        return projects.stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -117,6 +122,12 @@ public class ProjectService {
     }
 
     private String trimToNull(String value) {
+        if (value == null) return null;
+        String v = value.trim();
+        return v.isBlank() ? null : v;
+    }
+
+    private String normalizeSearch(String value) {
         if (value == null) return null;
         String v = value.trim();
         return v.isBlank() ? null : v;
@@ -143,9 +154,9 @@ public class ProjectService {
                 p.getCreatedAt()
         );
     }
+
     @Transactional(readOnly = true)
     public ProjectProgressResponse myProgress(Long userId, Long projectId) {
-
         memberRepository.findByProjectIdAndUserId(projectId, userId)
                 .orElseThrow(() -> new ForbiddenException("Not a project member"));
 
@@ -184,5 +195,4 @@ public class ProjectService {
 
         memberRepository.delete(member);
     }
-
 }

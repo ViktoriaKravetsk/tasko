@@ -137,9 +137,13 @@
 .content {
     position: relative;
     z-index: 10;
-    max-width: 1240px;
+    max-width: 1260px;
     margin: 0 auto;
-    padding: 18px 20px 150px;
+    padding: 32px 28px 180px;
+}
+
+.content > * + * {
+    margin-top: 16px;
 }
 
 .content > *:first-child {
@@ -242,7 +246,7 @@
     }
 
     .content {
-        padding: 16px 14px 132px;
+        padding: 24px 18px 150px;
     }
 
     .user__email {
@@ -255,12 +259,56 @@
     .user__meta {
         display: none;
     }
+}
+.user__profile-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
 
-    .drawer {
-        width: min(320px, calc(100vw - 28px));
-    }
+.user__profile-link:hover .user__name {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
 
-    .content {
-        padding: 14px 12px 120px;
-    }
+.user__profile-link:focus-visible {
+    outline: 3px solid rgba(197, 175, 233, 0.45);
+    outline-offset: 4px;
+    border-radius: 999px;
+}
+
+.user__profile-link .user__meta {
+    display: grid;
+    min-width: 0;
+}
+
+.user__profile-link .user__avatar {
+    flex: 0 0 auto;
+}
+.brand__name-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+}
+
+.brand__name-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.brand__name-link:focus-visible {
+    outline: 3px solid rgba(197, 175, 233, 0.45);
+    outline-offset: 4px;
+    border-radius: 999px;
 }

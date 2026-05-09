@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import type { SubmissionShort } from '../api/types'
 import { submissionsApi } from '../api/submissions.api'
+import type { SubmissionShort } from '../api/types'
 
 type LocationState = { mode?: 'teacher' | 'student' }
 
@@ -16,11 +16,24 @@ export default function TaskSubmissionsPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
-    async function load() {
+    const [search, setSearch] = useState('')
+    const [debouncedSearch, setDebouncedSearch] = useState('')
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setDebouncedSearch(search.trim())
+        }, 300)
+
+        return () => window.clearTimeout(timeout)
+    }, [search])
+
+    async function load(searchValue?: string) {
         setLoading(true)
         setError(null)
+
         try {
-            const list = await submissionsApi.listByTask(pid, tid)
+            const normalizedSearch = searchValue?.trim() || undefined
+            const list = await submissionsApi.listByTask(pid, tid, normalizedSearch)
             setItems(list)
         } catch (e: any) {
             setError(e?.message ?? 'Failed to load submissions')
@@ -30,17 +43,17 @@ export default function TaskSubmissionsPage() {
     }
 
     useEffect(() => {
-        void load()
-    }, [pid, tid])
+        void load(debouncedSearch)
+    }, [pid, tid, debouncedSearch])
 
     return (
         <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                 <Link to={`/projects/${pid}/tasks/${tid}`} state={{ mode }} className="btn btn--ghost">
                     ← Back
                 </Link>
 
-                <button className="btn" onClick={() => void load()} disabled={loading}>
+                <button className="btn" onClick={() => void load(debouncedSearch)} disabled={loading}>
                     {loading ? 'Loading…' : 'Refresh'}
                 </button>
             </div>
@@ -48,6 +61,32 @@ export default function TaskSubmissionsPage() {
             <div style={{ marginTop: 14, marginBottom: 10 }}>
                 <h1>Submissions</h1>
                 <div className="small">All submissions for this task</div>
+            </div>
+
+            <div
+                className="card card--soft"
+                style={{
+                    marginTop: 12,
+                    marginBottom: 12,
+                    display: 'flex',
+                    gap: 12,
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                }}
+            >
+                <input
+                    className="inp"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search student by name..."
+                    style={{ maxWidth: 320, margin: 0 }}
+                />
+
+                {search.trim() ? (
+                    <button type="button" className="btn btn--ghost" onClick={() => setSearch('')}>
+                        Clear
+                    </button>
+                ) : null}
             </div>
 
             {error ? (
@@ -59,8 +98,10 @@ export default function TaskSubmissionsPage() {
 
             {!loading && items.length === 0 ? (
                 <div className="card card--soft" style={{ marginTop: 12 }}>
-                    <h2>No submissions yet</h2>
-                    <div className="small">Students haven’t submitted anything for this task.</div>
+                    <h2>No submissions found</h2>
+                    <div className="small">
+                        {debouncedSearch ? 'Try another student name.' : 'Students haven’t submitted anything for this task.'}
+                    </div>
                 </div>
             ) : null}
 

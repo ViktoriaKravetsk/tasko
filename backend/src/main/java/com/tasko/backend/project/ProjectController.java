@@ -24,8 +24,11 @@ public class ProjectController {
     }
 
     @GetMapping("/my")
-    public List<ProjectResponse> my(@AuthenticationPrincipal CurrentUser principal) {
-        return projectService.listMy(principal.getUserId());
+    public List<ProjectResponse> my(
+            @AuthenticationPrincipal CurrentUser principal,
+            @RequestParam(required = false) String search
+    ) {
+        return projectService.listMy(principal.getUserId(), search);
     }
 
     @PostMapping("/join")
@@ -35,8 +38,11 @@ public class ProjectController {
     }
 
     @GetMapping("/enrolled")
-    public List<ProjectResponse> enrolled(@AuthenticationPrincipal CurrentUser principal) {
-        return projectService.listEnrolled(principal.getUserId());
+    public List<ProjectResponse> enrolled(
+            @AuthenticationPrincipal CurrentUser principal,
+            @RequestParam(required = false) String search
+    ) {
+        return projectService.listEnrolled(principal.getUserId(), search);
     }
 
     @GetMapping("/{projectId}/progress/me")
@@ -62,5 +68,4 @@ public class ProjectController {
     ) {
         projectService.leaveProject(principal.getUserId(), projectId);
     }
-
 }

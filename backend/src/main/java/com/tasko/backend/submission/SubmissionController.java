@@ -40,9 +40,10 @@ public class SubmissionController {
     public List<SubmissionShortResponse> listForOwner(
             @AuthenticationPrincipal CurrentUser principal,
             @PathVariable Long projectId,
-            @PathVariable Long taskId
+            @PathVariable Long taskId,
+            @RequestParam(required = false) String search
     ) {
-        return submissionService.listForOwner(principal.getUserId(), projectId, taskId);
+        return submissionService.listForOwner(principal.getUserId(), projectId, taskId, search);
     }
 
     @GetMapping("/submissions/{submissionId}")

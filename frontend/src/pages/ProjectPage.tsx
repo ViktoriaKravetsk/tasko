@@ -1,27 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import type { Project, Submission, Task } from '../api/types'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { projectsApi } from '../api/projects.api'
-import { tasksApi } from '../api/tasks.api'
 import { submissionsApi } from '../api/submissions.api'
+import { tasksApi, type TaskDeadlineFilter } from '../api/tasks.api'
+import type { Project, Submission, Task } from '../api/types'
 
 type Mode = 'teacher' | 'student'
 type Tab = 'overview' | 'tasks' | 'create'
-type LocationState = { mode?: Mode }
 
 export default function ProjectPage() {
     const { projectId } = useParams()
     const projectIdNum = projectId ? Number(projectId) : NaN
 
     const navigate = useNavigate()
-    const location = useLocation()
-    const mode: Mode = (location.state as LocationState | null)?.mode ?? 'teacher'
 
+    const [mode, setMode] = useState<Mode>('student')
     const [project, setProject] = useState<Project | null>(null)
     const [tasks, setTasks] = useState<Task[]>([])
     const [mySubs, setMySubs] = useState<Record<number, Submission | null>>({})
     const [loading, setLoading] = useState(false)
     const [err, setErr] = useState<string | null>(null)
+
     const [tab, setTab] = useState<Tab>('tasks')
     const [tTitle, setTTitle] = useState('')
     const [tDesc, setTDesc] = useState('')
@@ -29,11 +28,139 @@ export default function ProjectPage() {
     const [tMaxScore, setTMaxScore] = useState<number>(10)
     const [copied, setCopied] = useState(false)
 
-    const emojis = useMemo(() => ['📚', '🎨', '🔬', '🚀', '💡', '🎯', '🌍', '🎵', '🖌️', '⚽', '🧠', '🔭'], [])
-    const emoji = useMemo(() => (projectId ? emojis[Math.abs(hash(projectId)) % emojis.length] : '📚'), [emojis, projectId])
+    const [taskSearch, setTaskSearch] = useState('')
+    const [debouncedTaskSearch, setDebouncedTaskSearch] = useState('')
+    const [deadlineFilter, setDeadlineFilter] = useState<TaskDeadlineFilter>('ALL')
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setDebouncedTaskSearch(taskSearch.trim())
+        }, 300)
+
+        return () => window.clearTimeout(timeout)
+    }, [taskSearch])
+
+    const load = async (searchValue?: string, deadlineValue?: TaskDeadlineFilter) => {
+        if (!projectId) return
+
+        const pid = Number(projectId)
+        if (!Number.isFinite(pid)) return
+
+        setLoading(true)
+        setErr(null)
+
+        try {
+            const normalizedSearch = searchValue?.trim() || undefined
+            const effectiveDeadlineFilter = deadlineValue ?? 'ALL'
+
+            const [my, enrolled, ts] = await Promise.all([
+                projectsApi.my(),
+                projectsApi.enrolled(),
+                tasksApi.list(pid, {
+                    search: normalizedSearch,
+                    deadlineFilter: effectiveDeadlineFilter,
+                }),
+            ])
+
+            const ownedProject = my.find((x) => x.id === pid) ?? null
+            const enrolledProject = enrolled.find((x) => x.id === pid) ?? null
+
+            const effectiveProject = ownedProject ?? enrolledProject
+            const effectiveMode: Mode = ownedProject ? 'teacher' : 'student'
+
+            setProject(effectiveProject)
+            setMode(effectiveMode)
+            setTasks(ts)
+
+            if (!effectiveProject) {
+                setMySubs({})
+                setErr('Project not found')
+                return
+            }
+
+            if (effectiveMode === 'student') {
+                const pairs = await Promise.all(
+                    ts.map(async (t: Task) => {
+                        try {
+                            const s = await submissionsApi.my(pid, t.id)
+                            return [t.id, s] as const
+                        } catch {
+                            return [t.id, null] as const
+                        }
+                    })
+                )
+
+                const map: Record<number, Submission | null> = {}
+                for (const [tid, s] of pairs) {
+                    map[tid] = s
+                }
+
+                setMySubs(map)
+            } else {
+                setMySubs({})
+            }
+        } catch (e: any) {
+            setErr(e?.response?.data?.message ?? 'Failed to load project')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        void load(debouncedTaskSearch, deadlineFilter)
+    }, [projectId, debouncedTaskSearch, deadlineFilter])
+
+    const createTask = async () => {
+        if (mode !== 'teacher') return
+        if (!projectId || Number.isNaN(projectIdNum)) return
+        if (!tTitle.trim()) return
+
+        setLoading(true)
+        setErr(null)
+
+        try {
+            await tasksApi.create(projectIdNum, {
+                title: tTitle.trim(),
+                description: tDesc.trim() || undefined,
+                deadline: tDeadline || undefined,
+                maxScore: tMaxScore,
+            })
+
+            setTTitle('')
+            setTDesc('')
+            setTDeadline('')
+            setTMaxScore(10)
+
+            await load(debouncedTaskSearch, deadlineFilter)
+            setTab('tasks')
+        } catch (e: any) {
+            setErr(e?.response?.data?.message ?? 'Create task failed')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const deleteProject = async () => {
+        if (mode !== 'teacher') return
+        if (!projectId || Number.isNaN(projectIdNum)) return
+        if (!confirm('Delete this project?')) return
+
+        setLoading(true)
+        setErr(null)
+
+        try {
+            await projectsApi.delete(projectIdNum)
+            navigate('/')
+        } catch (e: any) {
+            setErr(e?.response?.data?.message ?? 'Delete failed')
+        } finally {
+            setLoading(false)
+        }
+    }
 
     const copy = async (text: string) => {
         if (!text) return
+
         try {
             await navigator.clipboard.writeText(text)
         } catch {
@@ -49,100 +176,27 @@ export default function ProjectPage() {
         }
     }
 
-    const load = async () => {
-        if (!projectId) return
-        const pid = Number(projectId)
-        if (!Number.isFinite(pid)) return
-
-        setLoading(true)
-        setErr(null)
-
-        try {
-            const [my, enrolled, ts] = await Promise.all([projectsApi.my(), projectsApi.enrolled(), tasksApi.list(pid)])
-            const p = [...my, ...enrolled].find((x) => x.id === pid) ?? null
-
-            setProject(p)
-            setTasks(ts)
-
-            if (mode === 'student') {
-                const pairs = await Promise.all(
-                    ts.map(async (t: Task) => {
-                        try {
-                            const s = await submissionsApi.my(pid, t.id)
-                            return [t.id, s] as const
-                        } catch {
-                            return [t.id, null] as const
-                        }
-                    })
-                )
-
-                const map: Record<number, Submission | null> = {}
-                for (const [tid, s] of pairs) map[tid] = s
-                setMySubs(map)
-            } else {
-                setMySubs({})
-            }
-        } catch (e: any) {
-            setErr(e?.response?.data?.message ?? 'Failed to load project')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    useEffect(() => {
-        void load()
-    }, [projectId])
-
-    const createTask = async () => {
-        if (!projectId || Number.isNaN(projectIdNum)) return
-        if (!tTitle.trim()) return
-        setLoading(true)
-        setErr(null)
-        try {
-            await tasksApi.create(projectIdNum, {
-                title: tTitle.trim(),
-                description: tDesc.trim() || undefined,
-                deadline: tDeadline || undefined,
-                maxScore: tMaxScore,
-            })
-            setTTitle('')
-            setTDesc('')
-            setTDeadline('')
-            setTMaxScore(10)
-            await load()
-            setTab('tasks')
-        } catch (e: any) {
-            setErr(e?.response?.data?.message ?? 'Create task failed')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const deleteProject = async () => {
-        if (!projectId || Number.isNaN(projectIdNum)) return
-        if (!confirm('Delete this project?')) return
-        setLoading(true)
-        setErr(null)
-        try {
-            await projectsApi.delete(projectIdNum)
-            navigate('/')
-        } catch (e: any) {
-            setErr(e?.response?.data?.message ?? 'Delete failed')
-        } finally {
-            setLoading(false)
-        }
-    }
-
     const submittedCount = useMemo(() => Object.values(mySubs).filter(Boolean).length, [mySubs])
+
     const progressPct = useMemo(() => {
         const total = tasks.length
         if (total === 0) return 0
         return Math.round((submittedCount / total) * 100)
     }, [submittedCount, tasks.length])
 
+    const emojis = useMemo(
+        () => ['📚', '🎨', '🔬', '🚀', '💡', '🎯', '🌍', '🎵', '🖌️', '⚽', '🧠', '🔭'],
+        []
+    )
+
+    const emoji = useMemo(
+        () => (projectId ? emojis[Math.abs(hash(projectId)) % emojis.length] : '📚'),
+        [emojis, projectId]
+    )
+
     return (
         <div className="page-wrap">
-            <Link to="/" className="btn btn--ghost" style={{ textDecoration: 'none' }}>
+            <Link to={mode === 'teacher' ? '/projects/mine' : '/projects/enrolled'} className="btn btn--ghost" style={{ textDecoration: 'none' }}>
                 ← Back
             </Link>
 
@@ -158,15 +212,12 @@ export default function ProjectPage() {
                         <div className="project-card-emoji" style={{ margin: 0 }}>
                             {emoji}
                         </div>
+
                         <div>
                             <div className="panel-title">{project?.name ?? (loading ? 'Loading…' : 'Project')}</div>
                             <div className="panel-sub">{project?.description ?? 'No description'}</div>
                         </div>
                     </div>
-
-                    <span className={mode === 'teacher' ? 'role-badge rb-teacher' : 'role-badge rb-student'}>
-                        {mode === 'teacher' ? 'Teacher' : 'Student'}
-                    </span>
 
                     {project?.joinCode ? (
                         <button
@@ -188,14 +239,28 @@ export default function ProjectPage() {
 
                 <div className="panel-body">
                     <div className="tabs">
-                        <button className={tab === 'overview' ? 'tab tab--active' : 'tab'} onClick={() => setTab('overview')} type="button">
+                        <button
+                            className={tab === 'overview' ? 'tab tab--active' : 'tab'}
+                            onClick={() => setTab('overview')}
+                            type="button"
+                        >
                             🌼 Overview
                         </button>
-                        <button className={tab === 'tasks' ? 'tab tab--active' : 'tab'} onClick={() => setTab('tasks')} type="button">
+
+                        <button
+                            className={tab === 'tasks' ? 'tab tab--active' : 'tab'}
+                            onClick={() => setTab('tasks')}
+                            type="button"
+                        >
                             📋 Tasks
                         </button>
+
                         {mode === 'teacher' ? (
-                            <button className={tab === 'create' ? 'tab tab--active' : 'tab'} onClick={() => setTab('create')} type="button">
+                            <button
+                                className={tab === 'create' ? 'tab tab--active' : 'tab'}
+                                onClick={() => setTab('create')}
+                                type="button"
+                            >
                                 ✨ Create task
                             </button>
                         ) : null}
@@ -213,6 +278,7 @@ export default function ProjectPage() {
                                     <span>📌 Tasks</span>
                                     <span>{tasks.length}</span>
                                 </div>
+
                                 {mode === 'student' ? (
                                     <div className="info-row">
                                         <span>✅ Submitted</span>
@@ -233,7 +299,9 @@ export default function ProjectPage() {
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="muted">As a teacher, you can create tasks and review submissions.</div>
+                                    <div className="muted">
+                                        As a teacher, you can create tasks and review submissions.
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -241,17 +309,74 @@ export default function ProjectPage() {
 
                     {tab === 'tasks' ? (
                         <>
+                            <div
+                                className="panel"
+                                style={{
+                                    marginBottom: 16,
+                                    padding: 16,
+                                    background: 'rgba(255,255,255,0.44)',
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        gap: 12,
+                                        alignItems: 'center',
+                                        flexWrap: 'wrap',
+                                    }}
+                                >
+                                    <input
+                                        className="inp"
+                                        value={taskSearch}
+                                        onChange={(e) => setTaskSearch(e.target.value)}
+                                        placeholder="Search tasks by title..."
+                                        style={{ maxWidth: 320, margin: 0 }}
+                                    />
+
+                                    <select
+                                        className="inp"
+                                        value={deadlineFilter}
+                                        onChange={(e) => setDeadlineFilter(e.target.value as TaskDeadlineFilter)}
+                                        style={{ maxWidth: 220, margin: 0 }}
+                                    >
+                                        <option value="ALL">All deadlines</option>
+                                        <option value="UPCOMING">Upcoming</option>
+                                        <option value="OVERDUE">Overdue</option>
+                                        <option value="NO_DEADLINE">No deadline</option>
+                                    </select>
+
+                                    {taskSearch.trim() || deadlineFilter !== 'ALL' ? (
+                                        <button
+                                            type="button"
+                                            className="btn btn--ghost"
+                                            onClick={() => {
+                                                setTaskSearch('')
+                                                setDeadlineFilter('ALL')
+                                            }}
+                                        >
+                                            Clear
+                                        </button>
+                                    ) : null}
+                                </div>
+                            </div>
+
                             {tasks.length === 0 ? (
                                 <div className="empty">
                                     <div className="empty-icon">📝</div>
-                                    <div className="empty-text">No tasks yet</div>
-                                    <div className="empty-sub">{mode === 'teacher' ? 'Create your first task!' : 'Ask your teacher to add tasks.'}</div>
+                                    <div className="empty-text">No tasks found</div>
+                                    <div className="empty-sub">
+                                        {taskSearch.trim() || deadlineFilter !== 'ALL'
+                                            ? 'Try another task title or change the deadline filter.'
+                                            : mode === 'teacher'
+                                                ? 'Create your first task!'
+                                                : 'Ask your teacher to add tasks.'}
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="tasks-grid">
                                     {tasks.map((t: Task) => {
                                         const sub = mySubs[t.id]
-                                        const status = mode === 'student' ? (sub ? 'Submitted' : 'Not submitted') : 'Open'
+
                                         return (
                                             <div key={t.id} className="task-card">
                                                 <div className="task-top">
@@ -259,14 +384,16 @@ export default function ProjectPage() {
                                                         <div className="task-title">{t.title}</div>
                                                         <div className="task-desc">{t.description || 'No description'}</div>
                                                     </div>
-                                                    <span className={sub ? 'status-pill st-done' : 'status-pill st-open'}>
-                                                        {sub ? '✅' : '⏳'} {status}
-                                                    </span>
+
+                                                    {mode === 'student' ? (
+                                                        <span className={sub ? 'status-pill st-done' : 'status-pill st-open'}>
+                                                            {sub ? '✅ Submitted' : '⏳ Not submitted'}
+                                                        </span>
+                                                    ) : null}
                                                 </div>
 
                                                 <div className="task-meta">
                                                     <span className="meta-pill">📅 {t.deadline || 'No deadline'}</span>
-                                                    <span className="meta-pill">🏅 {t.maxScore} pts</span>
                                                 </div>
 
                                                 <div className="task-actions">
@@ -290,12 +417,12 @@ export default function ProjectPage() {
                                                         </Link>
                                                     ) : (
                                                         <Link
-                                                            to={`/projects/${projectId}/tasks/${t.id}/my-submission`}
+                                                            to={`/projects/${projectId}/tasks/${t.id}`}
                                                             state={{ mode }}
                                                             className="btn btn--primary"
                                                             style={{ textDecoration: 'none' }}
                                                         >
-                                                            My submission →
+                                                            Submit / View answer →
                                                         </Link>
                                                     )}
                                                 </div>
@@ -311,10 +438,18 @@ export default function ProjectPage() {
                         <div className="create-wrap">
                             <div className="create-card">
                                 <div className="info-title">✨ Create a task</div>
-                                <div className="muted">Fill out the fields below and publish it to your students.</div>
+                                <div className="muted">
+                                    Fill out the fields below and publish it to your students.
+                                </div>
+
                                 <div style={{ height: 12 }} />
 
-                                <input className="inp" value={tTitle} onChange={(e) => setTTitle(e.target.value)} placeholder="Task title" />
+                                <input
+                                    className="inp"
+                                    value={tTitle}
+                                    onChange={(e) => setTTitle(e.target.value)}
+                                    placeholder="Task title"
+                                />
 
                                 <textarea
                                     className="inp"
@@ -324,7 +459,13 @@ export default function ProjectPage() {
                                 />
 
                                 <div className="row2">
-                                    <input className="inp" type="date" value={tDeadline} onChange={(e) => setTDeadline(e.target.value)} />
+                                    <input
+                                        className="inp"
+                                        type="date"
+                                        value={tDeadline}
+                                        onChange={(e) => setTDeadline(e.target.value)}
+                                    />
+
                                     <input
                                         className="inp"
                                         type="number"
@@ -336,7 +477,12 @@ export default function ProjectPage() {
                                     />
                                 </div>
 
-                                <button className="btn-primary" onClick={createTask} disabled={loading || !tTitle.trim()} type="button">
+                                <button
+                                    className="btn-primary"
+                                    onClick={createTask}
+                                    disabled={loading || !tTitle.trim()}
+                                    type="button"
+                                >
                                     Create ✨
                                 </button>
                             </div>

@@ -14,19 +14,39 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
 
     List<Submission> findAllByTaskIdOrderBySubmittedAtDesc(Long taskId);
 
-    List<Submission> findAllByTaskIdInAndStudentId(Collection<Long> taskIds, Long studentId);
-
-    @Query("""
-select coalesce(sum(coalesce(s.teacherScore, 0)), 0)
-from Submission s
-join Task t on t.id = s.taskId
-where t.projectId = :projectId
-  and s.studentId = :studentId
-""")
-    int sumEarnedScore(@Param("projectId") Long projectId, @Param("studentId") Long studentId);
-
     void deleteAllByTaskId(Long taskId);
 
     void deleteAllByTaskIdIn(Collection<Long> taskIds);
 
+    List<Submission> findAllByTaskIdInAndStudentId(Collection<Long> taskIds, Long studentId);
+
+    @Query("""
+            select coalesce(sum(coalesce(s.teacherScore, 0)), 0)
+            from Submission s
+            join Task t on t.id = s.taskId
+            where t.projectId = :projectId
+              and s.studentId = :studentId
+            """)
+    int sumEarnedScore(@Param("projectId") Long projectId, @Param("studentId") Long studentId);
+
+    @Query("""
+            select s
+            from Submission s
+            where s.taskId = :taskId
+            order by s.submittedAt desc
+            """)
+    List<Submission> findByTaskIdForOwner(@Param("taskId") Long taskId);
+
+    @Query("""
+            select s
+            from Submission s, User u
+            where s.studentId = u.id
+              and s.taskId = :taskId
+              and lower(u.name) like concat('%', lower(:search), '%')
+            order by s.submittedAt desc
+            """)
+    List<Submission> findByTaskIdForOwnerAndSearch(
+            @Param("taskId") Long taskId,
+            @Param("search") String search
+    );
 }

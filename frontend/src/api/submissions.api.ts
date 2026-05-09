@@ -11,6 +11,19 @@ export type GradeRequest = {
     teacherComment?: string | null
 }
 
+function buildQuery(params: Record<string, string | undefined | null>) {
+    const searchParams = new URLSearchParams()
+
+    Object.entries(params).forEach(([key, value]) => {
+        if (value != null && value !== '') {
+            searchParams.set(key, value)
+        }
+    })
+
+    const query = searchParams.toString()
+    return query ? `?${query}` : ''
+}
+
 export const submissionsApi = {
     my: (projectId: number, taskId: number) =>
         api<Submission | null>(`/api/projects/${projectId}/tasks/${taskId}/submission/me`),
@@ -21,8 +34,12 @@ export const submissionsApi = {
             body: JSON.stringify(body),
         }),
 
-    listByTask: (projectId: number, taskId: number) =>
-        api<SubmissionShort[]>(`/api/projects/${projectId}/tasks/${taskId}/submissions`),
+    listByTask: (projectId: number, taskId: number, search?: string) =>
+        api<SubmissionShort[]>(
+            `/api/projects/${projectId}/tasks/${taskId}/submissions${buildQuery({
+                search: search?.trim() || undefined,
+            })}`
+        ),
 
     getById: (projectId: number, taskId: number, submissionId: number) =>
         api<Submission>(`/api/projects/${projectId}/tasks/${taskId}/submissions/${submissionId}`),

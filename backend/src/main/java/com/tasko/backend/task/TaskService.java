@@ -1,6 +1,9 @@
 package com.tasko.backend.task;
 
-import com.tasko.backend.exception.*;
+import com.tasko.backend.exception.BadRequestException;
+import com.tasko.backend.exception.ForbiddenException;
+import com.tasko.backend.exception.NotFoundException;
+import com.tasko.backend.exception.UnauthenticatedException;
 import com.tasko.backend.notification.NotificationService;
 import com.tasko.backend.project.ProjectMember;
 import com.tasko.backend.project.ProjectMemberRepository;
@@ -10,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 
@@ -20,7 +24,6 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final ProjectMemberRepository memberRepository;
     private final SubmissionRepository submissionRepository;
-
     private final NotificationService notificationService;
 
     @Transactional
@@ -39,17 +42,38 @@ public class TaskService {
                 .maxScore(req.maxScore())
                 .status(TaskStatus.TODO)
                 .build());
-        notificationService.taskCreated(saved.getId());
 
+        notificationService.taskCreated(saved.getId());
         return toResponse(saved);
     }
 
     @Transactional(readOnly = true)
-    public List<TaskShortResponse> list(Long userId, Long projectId) {
+    public List<TaskShortResponse> list(Long userId, Long projectId, String search, TaskDeadlineFilter deadlineFilter) {
         requireMember(projectId, userId);
 
-        return taskRepository.findAllByProjectIdOrderByCreatedAtDesc(projectId)
-                .stream()
+        String normalizedSearch = normalizeSearch(search);
+        TaskDeadlineFilter safeFilter = deadlineFilter == null ? TaskDeadlineFilter.ALL : deadlineFilter;
+        LocalDate today = LocalDate.now();
+
+        List<Task> tasks;
+
+        if (normalizedSearch == null) {
+            tasks = switch (safeFilter) {
+                case ALL -> taskRepository.findByProjectIdOrderByCreatedAtDesc(projectId);
+                case OVERDUE -> taskRepository.findOverdueByProjectId(projectId, today);
+                case UPCOMING -> taskRepository.findUpcomingByProjectId(projectId, today);
+                case NO_DEADLINE -> taskRepository.findNoDeadlineByProjectId(projectId);
+            };
+        } else {
+            tasks = switch (safeFilter) {
+                case ALL -> taskRepository.findByProjectIdAndTitleContainingIgnoreCaseOrderByCreatedAtDesc(projectId, normalizedSearch);
+                case OVERDUE -> taskRepository.findOverdueByProjectIdAndSearch(projectId, normalizedSearch, today);
+                case UPCOMING -> taskRepository.findUpcomingByProjectIdAndSearch(projectId, normalizedSearch, today);
+                case NO_DEADLINE -> taskRepository.findNoDeadlineByProjectIdAndSearch(projectId, normalizedSearch);
+            };
+        }
+
+        return tasks.stream()
                 .map(this::toShortResponse)
                 .toList();
     }
@@ -134,6 +158,12 @@ public class TaskService {
     }
 
     private String normalizeNullable(String value) {
+        if (value == null) return null;
+        String v = value.trim();
+        return v.isBlank() ? null : v;
+    }
+
+    private String normalizeSearch(String value) {
         if (value == null) return null;
         String v = value.trim();
         return v.isBlank() ? null : v;
