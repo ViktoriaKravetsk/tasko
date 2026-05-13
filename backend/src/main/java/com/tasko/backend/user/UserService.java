@@ -30,6 +30,7 @@ public class UserService {
         String normalizedEmail = email.toLowerCase();
 
         User u = userRepository.findByGoogleId(googleId)
+                .or(() -> userRepository.findByEmail(normalizedEmail))
                 .orElseGet(() -> User.builder()
                         .googleId(googleId)
                         .enabled(true)

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import './styles/retro.css'
+import './styles/project-submissions-final.css'
 
 import { AuthProvider } from './auth/AuthContext'
 

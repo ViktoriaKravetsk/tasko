@@ -23,6 +23,7 @@ public class NotificationService {
     private final EmailService emailService;
 
     private final NotificationLogRepository logRepository;
+    private final NotificationCenterService notificationCenterService;
 
     private final TaskRepository taskRepository;
     private final SubmissionRepository submissionRepository;
@@ -33,8 +34,6 @@ public class NotificationService {
     @Async
     @Transactional
     public void taskCreated(Long taskId) {
-        if (!props.isEnabled()) return;
-
         Task task = taskRepository.findById(taskId).orElse(null);
         if (task == null) return;
 
@@ -46,11 +45,23 @@ public class NotificationService {
 
         for (ProjectMember m : students) {
             User u = userRepository.findById(m.getUserId()).orElse(null);
-            if (u == null || u.getEmail() == null || u.getEmail().isBlank()) continue;
+            if (u == null) continue;
+
+            String href = "/projects/" + project.getId() + "/tasks/" + task.getId();
+            notificationCenterService.create(
+                    u.getId(),
+                    NotificationType.TASK_CREATED,
+                    "New task added",
+                    project.getName() + ": " + task.getTitle(),
+                    href,
+                    task.getId()
+            );
+
+            if (!props.isEnabled() || u.getEmail() == null || u.getEmail().isBlank()) continue;
 
             String to = u.getEmail();
             String subject = "New task in project \"" + project.getName() + "\"";
-            String link = props.getFrontendBaseUrl() + "/projects/" + project.getId() + "/tasks/" + task.getId();
+            String link = props.getFrontendBaseUrl() + href;
 
             String html = templateTaskCreated(
                     u.getName(), project.getName(), task.getTitle(), task.getDeadline(), task.getMaxScore(), link
@@ -63,8 +74,6 @@ public class NotificationService {
     @Async
     @Transactional
     public void submissionGraded(Long submissionId) {
-        if (!props.isEnabled()) return;
-
         Submission s = submissionRepository.findById(submissionId).orElse(null);
         if (s == null) return;
 
@@ -75,11 +84,23 @@ public class NotificationService {
         if (project == null) return;
 
         User student = userRepository.findById(s.getStudentId()).orElse(null);
-        if (student == null || student.getEmail() == null || student.getEmail().isBlank()) return;
+        if (student == null) return;
+
+        String href = "/projects/" + project.getId() + "/tasks/" + task.getId();
+        notificationCenterService.create(
+                student.getId(),
+                NotificationType.TASK_GRADED,
+                "Task graded",
+                task.getTitle() + ": " + (s.getTeacherScore() == null ? "-" : s.getTeacherScore()) + " / " + task.getMaxScore(),
+                href,
+                s.getId()
+        );
+
+        if (!props.isEnabled() || student.getEmail() == null || student.getEmail().isBlank()) return;
 
         String to = student.getEmail();
         String subject = "Your submission has been graded";
-        String link = props.getFrontendBaseUrl() + "/projects/" + project.getId() + "/tasks/" + task.getId() + "/my";
+        String link = props.getFrontendBaseUrl() + href;
 
         String html = templateTaskGraded(
                 student.getName(),
@@ -129,8 +150,6 @@ public class NotificationService {
     }
 
     private void submissionChanged(Long submissionId, NotificationType type, String subjectPrefix, String actionText) {
-        if (!props.isEnabled()) return;
-
         Submission s = submissionRepository.findById(submissionId).orElse(null);
         if (s == null) return;
 
@@ -141,17 +160,29 @@ public class NotificationService {
         if (project == null) return;
 
         User owner = userRepository.findById(project.getOwnerId()).orElse(null);
-        if (owner == null || owner.getEmail() == null || owner.getEmail().isBlank()) return;
+        if (owner == null) return;
 
         User student = userRepository.findById(s.getStudentId()).orElse(null);
         String studentName = student == null ? "Unknown student" : student.getName();
 
-        String to = owner.getEmail();
-        String subject = subjectPrefix + ": " + task.getTitle();
-        String link = props.getFrontendBaseUrl()
-                + "/projects/" + project.getId()
+        String href = "/projects/" + project.getId()
                 + "/tasks/" + task.getId()
                 + "/submissions/" + s.getId();
+
+        notificationCenterService.create(
+                owner.getId(),
+                type,
+                subjectPrefix,
+                studentName + " " + actionText + " Task: " + task.getTitle(),
+                href,
+                s.getId()
+        );
+
+        if (!props.isEnabled() || owner.getEmail() == null || owner.getEmail().isBlank()) return;
+
+        String to = owner.getEmail();
+        String subject = subjectPrefix + ": " + task.getTitle();
+        String link = props.getFrontendBaseUrl() + href;
 
         String html = templateSubmissionChanged(
                 owner.getName(),
@@ -170,8 +201,6 @@ public class NotificationService {
     @Async
     @Transactional
     public void deadlineReminder(Long taskId, Long studentId) {
-        if (!props.isEnabled()) return;
-
         Task task = taskRepository.findById(taskId).orElse(null);
         if (task == null) return;
 
@@ -179,11 +208,23 @@ public class NotificationService {
         if (project == null) return;
 
         User student = userRepository.findById(studentId).orElse(null);
-        if (student == null || student.getEmail() == null || student.getEmail().isBlank()) return;
+        if (student == null) return;
+
+        String href = "/projects/" + project.getId() + "/tasks/" + task.getId();
+        notificationCenterService.create(
+                student.getId(),
+                NotificationType.DEADLINE_REMINDER,
+                "Deadline tomorrow",
+                project.getName() + ": " + task.getTitle(),
+                href,
+                task.getId()
+        );
+
+        if (!props.isEnabled() || student.getEmail() == null || student.getEmail().isBlank()) return;
 
         String to = student.getEmail();
         String subject = "Deadline tomorrow: " + task.getTitle();
-        String link = props.getFrontendBaseUrl() + "/projects/" + project.getId() + "/tasks/" + task.getId();
+        String link = props.getFrontendBaseUrl() + href;
 
         String html = templateDeadlineReminder(
                 student.getName(), project.getName(), task.getTitle(), task.getDeadline(), link

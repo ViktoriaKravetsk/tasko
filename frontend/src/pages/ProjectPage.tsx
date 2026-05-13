@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { getApiErrorMessage } from '../api/http'
 import { projectsApi } from '../api/projects.api'
 import { submissionsApi } from '../api/submissions.api'
 import { tasksApi, type TaskDeadlineFilter } from '../api/tasks.api'
 import type { Project, Submission, Task } from '../api/types'
+import ProjectEditModal from './ProjectEditModal'
+import TaskCreateModal from './TaskCreateModal'
+import TaskEditModal from './TaskEditModal'
+import { DEFAULT_PROJECT_EMOJI } from './projectEmojiOptions'
 
 type Mode = 'teacher' | 'student'
-type Tab = 'overview' | 'tasks' | 'create'
 
 export default function ProjectPage() {
     const { projectId } = useParams()
@@ -20,13 +24,11 @@ export default function ProjectPage() {
     const [mySubs, setMySubs] = useState<Record<number, Submission | null>>({})
     const [loading, setLoading] = useState(false)
     const [err, setErr] = useState<string | null>(null)
+    const [editOpen, setEditOpen] = useState(false)
+    const [taskCreateOpen, setTaskCreateOpen] = useState(false)
+    const [taskEditOpen, setTaskEditOpen] = useState(false)
+    const [editingTask, setEditingTask] = useState<Task | null>(null)
 
-    const [tab, setTab] = useState<Tab>('tasks')
-    const [tTitle, setTTitle] = useState('')
-    const [tDesc, setTDesc] = useState('')
-    const [tDeadline, setTDeadline] = useState('')
-    const [tMaxScore, setTMaxScore] = useState<number>(10)
-    const [tAllowResubmissionAfterGrade, setTAllowResubmissionAfterGrade] = useState(true)
     const [copied, setCopied] = useState(false)
 
     const [taskSearch, setTaskSearch] = useState('')
@@ -41,7 +43,7 @@ export default function ProjectPage() {
         return () => window.clearTimeout(timeout)
     }, [taskSearch])
 
-    const load = async (searchValue?: string, deadlineValue?: TaskDeadlineFilter) => {
+    const load = useCallback(async (searchValue?: string, deadlineValue?: TaskDeadlineFilter) => {
         if (!projectId) return
 
         const pid = Number(projectId)
@@ -65,7 +67,6 @@ export default function ProjectPage() {
 
             const ownedProject = my.find((x) => x.id === pid) ?? null
             const enrolledProject = enrolled.find((x) => x.id === pid) ?? null
-
             const effectiveProject = ownedProject ?? enrolledProject
             const effectiveMode: Mode = ownedProject ? 'teacher' : 'student'
 
@@ -81,67 +82,35 @@ export default function ProjectPage() {
 
             if (effectiveMode === 'student') {
                 const pairs = await Promise.all(
-                    ts.map(async (t: Task) => {
+                    ts.map(async (task: Task) => {
                         try {
-                            const s = await submissionsApi.my(pid, t.id)
-                            return [t.id, s] as const
+                            const submission = await submissionsApi.my(pid, task.id)
+                            return [task.id, submission] as const
                         } catch {
-                            return [t.id, null] as const
+                            return [task.id, null] as const
                         }
                     })
                 )
 
                 const map: Record<number, Submission | null> = {}
-                for (const [tid, s] of pairs) {
-                    map[tid] = s
+                for (const [taskId, submission] of pairs) {
+                    map[taskId] = submission
                 }
 
                 setMySubs(map)
             } else {
                 setMySubs({})
             }
-        } catch (e: any) {
-            setErr(e?.response?.data?.message ?? 'Failed to load project')
+        } catch (error) {
+            setErr(getApiErrorMessage(error, 'Failed to load project'))
         } finally {
             setLoading(false)
         }
-    }
+    }, [projectId])
 
     useEffect(() => {
         void load(debouncedTaskSearch, deadlineFilter)
-    }, [projectId, debouncedTaskSearch, deadlineFilter])
-
-    const createTask = async () => {
-        if (mode !== 'teacher') return
-        if (!projectId || Number.isNaN(projectIdNum)) return
-        if (!tTitle.trim()) return
-
-        setLoading(true)
-        setErr(null)
-
-        try {
-            await tasksApi.create(projectIdNum, {
-                title: tTitle.trim(),
-                description: tDesc.trim() || undefined,
-                deadline: tDeadline || undefined,
-                maxScore: tMaxScore,
-                allowResubmissionAfterGrade: tAllowResubmissionAfterGrade,
-            })
-
-            setTTitle('')
-            setTDesc('')
-            setTDeadline('')
-            setTMaxScore(10)
-            setTAllowResubmissionAfterGrade(true)
-
-            await load(debouncedTaskSearch, deadlineFilter)
-            setTab('tasks')
-        } catch (e: any) {
-            setErr(e?.response?.data?.message ?? 'Create task failed')
-        } finally {
-            setLoading(false)
-        }
-    }
+    }, [load, debouncedTaskSearch, deadlineFilter])
 
     const deleteProject = async () => {
         if (mode !== 'teacher') return
@@ -154,8 +123,8 @@ export default function ProjectPage() {
         try {
             await projectsApi.delete(projectIdNum)
             navigate('/')
-        } catch (e: any) {
-            setErr(e?.response?.data?.message ?? 'Delete failed')
+        } catch (error) {
+            setErr(getApiErrorMessage(error, 'Delete failed'))
         } finally {
             setLoading(false)
         }
@@ -167,16 +136,53 @@ export default function ProjectPage() {
         try {
             await navigator.clipboard.writeText(text)
         } catch {
-            const ta = document.createElement('textarea')
-            ta.value = text
-            document.body.appendChild(ta)
-            ta.select()
+            const textarea = document.createElement('textarea')
+            textarea.value = text
+            document.body.appendChild(textarea)
+            textarea.select()
             document.execCommand('copy')
-            document.body.removeChild(ta)
+            document.body.removeChild(textarea)
         } finally {
             setCopied(true)
             window.setTimeout(() => setCopied(false), 1200)
         }
+    }
+
+    const handleProjectUpdated = (updatedProject: Project) => {
+        setProject(updatedProject)
+        setEditOpen(false)
+        setErr(null)
+    }
+
+    const handleTaskCreated = (createdTask: Task) => {
+        setTasks((currentTasks) => [createdTask, ...currentTasks])
+        setTaskCreateOpen(false)
+        setErr(null)
+        void load(debouncedTaskSearch, deadlineFilter)
+    }
+
+    const openTaskEditor = async (task: Task) => {
+        if (!Number.isFinite(projectIdNum)) return
+
+        setLoading(true)
+        setErr(null)
+
+        try {
+            const loadedTask = await tasksApi.get(projectIdNum, task.id)
+            setEditingTask(loadedTask)
+            setTaskEditOpen(true)
+        } catch (error) {
+            setErr(getApiErrorMessage(error, 'Failed to load task for editing'))
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleTaskUpdated = (updatedTask: Task) => {
+        setTasks((currentTasks) => currentTasks.map((task) => task.id === updatedTask.id ? updatedTask : task))
+        setEditingTask(updatedTask)
+        setTaskEditOpen(false)
+        setErr(null)
     }
 
     const submittedCount = useMemo(() => Object.values(mySubs).filter(Boolean).length, [mySubs])
@@ -187,336 +193,306 @@ export default function ProjectPage() {
         return Math.round((submittedCount / total) * 100)
     }, [submittedCount, tasks.length])
 
-    const emojis = useMemo(
-        () => ['📚', '🎨', '🔬', '🚀', '💡', '🎯', '🌍', '🎵', '🖌️', '⚽', '🧠', '🔭'],
-        []
-    )
-
-    const emoji = useMemo(
-        () => (projectId ? emojis[Math.abs(hash(projectId)) % emojis.length] : '📚'),
-        [emojis, projectId]
-    )
+    const projectEmoji = project?.emoji?.trim() || DEFAULT_PROJECT_EMOJI
+    const isTeacher = mode === 'teacher'
+    const backTo = isTeacher ? '/projects/mine' : '/projects/enrolled'
+    const deadlineLabel = project?.deadline ?? 'No deadline'
+    const taskFiltersActive = taskSearch.trim() || deadlineFilter !== 'ALL'
+    const openTaskCount = Math.max(tasks.length - submittedCount, 0)
 
     return (
-        <div className="page-wrap">
-            <Link to={mode === 'teacher' ? '/projects/mine' : '/projects/enrolled'} className="btn btn--ghost" style={{ textDecoration: 'none' }}>
-                ← Back
-            </Link>
+        <div className="page-wrap page-stack project-detail-page">
+            <header className="project-detail-topline">
+                <Link to={backTo} className="project-detail-back">
+                    <span aria-hidden="true">&lt;-</span>
+                    <span>Back</span>
+                </Link>
 
-            {err && (
-                <div className="alert alert--error" style={{ marginTop: 12 }}>
-                    {err}
-                </div>
-            )}
+                {loading ? (
+                    <div className="project-detail-topline__meta">
+                        <span className="project-detail-loading">Updating</span>
+                    </div>
+                ) : null}
+            </header>
 
-            <div className="panel" style={{ marginTop: 14 }}>
-                <div className="panel-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-                        <div className="project-card-emoji" style={{ margin: 0 }}>
-                            {emoji}
-                        </div>
+            {err ? <div className="alert alert--error">{err}</div> : null}
 
-                        <div>
-                            <div className="panel-title">{project?.name ?? (loading ? 'Loading…' : 'Project')}</div>
-                            <div className="panel-sub">{project?.description ?? 'No description'}</div>
+            <section className="project-detail-hero">
+                <div className="project-detail-hero__content">
+                    <div className="project-detail-icon-shell">
+                        <div className="project-card-mark project-card-mark--emoji project-detail-emoji" aria-hidden="true">
+                            <span>{projectEmoji}</span>
                         </div>
                     </div>
 
-                    {project?.joinCode ? (
-                        <button
-                            className="count-pill count-pill--pink"
-                            onClick={() => void copy(project.joinCode ?? '')}
-                            title="Copy join code"
-                            type="button"
-                        >
-                            {copied ? 'Copied ✓' : `${project.joinCode} 📋`}
-                        </button>
-                    ) : null}
+                    <div className="project-detail-copy">
+                        <h1 className="project-detail-name">{project?.name ?? (loading ? 'Loading...' : 'Project')}</h1>
+                        <p className="project-detail-description">{project?.description ?? 'No description'}</p>
 
-                    {mode === 'teacher' ? (
-                        <button className="btn btn--danger" onClick={deleteProject} disabled={loading} type="button">
-                            🗑 Delete
-                        </button>
-                    ) : null}
+                        <div className="project-detail-metrics" aria-label="Project summary">
+                            <span className="project-detail-metric">
+                                <span>Deadline</span>
+                                <strong>{deadlineLabel}</strong>
+                            </span>
+                            <span className="project-detail-metric">
+                                <span>Tasks</span>
+                                <strong>{tasks.length}</strong>
+                            </span>
+                            {!isTeacher ? (
+                                <span className="project-detail-metric">
+                                    <span>Submitted</span>
+                                    <strong>{submittedCount}/{tasks.length}</strong>
+                                </span>
+                            ) : null}
+                        </div>
+                    </div>
                 </div>
 
-                <div className="panel-body">
-                    <div className="tabs">
-                        <button
-                            className={tab === 'overview' ? 'tab tab--active' : 'tab'}
-                            onClick={() => setTab('overview')}
-                            type="button"
-                        >
-                            🌼 Overview
-                        </button>
-
-                        <button
-                            className={tab === 'tasks' ? 'tab tab--active' : 'tab'}
-                            onClick={() => setTab('tasks')}
-                            type="button"
-                        >
-                            📋 Tasks
-                        </button>
-
-                        {mode === 'teacher' ? (
+                {isTeacher ? (
+                    <div className="project-detail-command">
+                        <div className="project-detail-command__actions">
                             <button
-                                className={tab === 'create' ? 'tab tab--active' : 'tab'}
-                                onClick={() => setTab('create')}
+                                className="btn btn--ghost"
+                                onClick={() => setEditOpen(true)}
+                                disabled={loading || !project}
                                 type="button"
                             >
-                                ✨ Create task
+                                Edit project
                             </button>
-                        ) : null}
+
+                            <button className="btn btn--danger" onClick={deleteProject} disabled={loading} type="button">
+                                Delete
+                            </button>
+                        </div>
                     </div>
+                ) : null}
+            </section>
 
-                    {tab === 'overview' ? (
-                        <div className="overview-grid">
-                            <div className="info-card">
-                                <div className="info-title">Quick info</div>
-                                <div className="info-row">
-                                    <span>🗓 Deadline</span>
-                                    <span>{project?.deadline ?? 'No deadline'}</span>
+            <div className="project-detail-shell">
+                <aside className="project-detail-rail" aria-label="Project status">
+                    <section className="project-rail-panel">
+                        <div className="project-rail-title">Project details</div>
+                        <div className="project-rail-row">
+                            <span>Deadline</span>
+                            <strong>{deadlineLabel}</strong>
+                        </div>
+                        <div className="project-rail-row">
+                            <span>Total tasks</span>
+                            <strong>{tasks.length}</strong>
+                        </div>
+                        {!isTeacher ? (
+                            <>
+                                <div className="project-rail-row">
+                                    <span>Open tasks</span>
+                                    <strong>{openTaskCount}</strong>
                                 </div>
-                                <div className="info-row">
-                                    <span>📌 Tasks</span>
-                                    <span>{tasks.length}</span>
-                                </div>
-
-                                {mode === 'student' ? (
-                                    <div className="info-row">
-                                        <span>✅ Submitted</span>
-                                        <span>{submittedCount}</span>
+                                <div className="project-rail-progress">
+                                    <div className="progress-bar">
+                                        <div className="progress-fill" style={{ width: `${progressPct}%` }} />
                                     </div>
-                                ) : null}
+                                    <span>{progressPct}% complete</span>
+                                </div>
+                            </>
+                        ) : (
+                            <p className="project-rail-note">
+                                Create tasks, review submissions, and keep the project clear for students.
+                            </p>
+                        )}
+                    </section>
+
+                    {project?.joinCode ? (
+                        <section className="project-rail-panel project-rail-panel--code">
+                            <div className="project-rail-title">Invite code</div>
+                            <button
+                                type="button"
+                                className="project-rail-code"
+                                onClick={() => void copy(project.joinCode ?? '')}
+                            >
+                                {copied ? 'Copied' : project.joinCode}
+                            </button>
+                        </section>
+                    ) : null}
+                </aside>
+
+                <main className="project-detail-main">
+                    <div className="project-detail-main__head">
+                        <div className="project-tasks-head">
+                            <div>
+                                <h2 className="project-tasks-head__title">Tasks</h2>
+                                <p className="project-tasks-head__text">
+                                    Search, open, submit, and review assignments in this project.
+                                </p>
                             </div>
 
-                            <div className="info-card">
-                                <div className="info-title">My progress</div>
-                                {mode === 'student' ? (
-                                    <>
-                                        <div className="progress-bar">
-                                            <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-                                        </div>
-                                        <div className="progress-label">
-                                            {progressPct}% ({submittedCount}/{tasks.length})
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="muted">
-                                        As a teacher, you can create tasks and review submissions.
-                                    </div>
-                                )}
+                            <div className="project-tasks-head__actions">
+                                {isTeacher ? (
+                                    <button
+                                        className="btn btn--primary"
+                                        onClick={() => setTaskCreateOpen(true)}
+                                        disabled={loading || !project}
+                                        type="button"
+                                    >
+                                        Create task
+                                    </button>
+                                ) : null}
+
+                                <button
+                                    className="btn btn--ghost"
+                                    onClick={() => void load(debouncedTaskSearch, deadlineFilter)}
+                                    disabled={loading}
+                                    type="button"
+                                >
+                                    Refresh
+                                </button>
                             </div>
                         </div>
-                    ) : null}
+                    </div>
 
-                    {tab === 'tasks' ? (
-                        <>
-                            <div
-                                className="panel"
-                                style={{
-                                    marginBottom: 16,
-                                    padding: 16,
-                                    background: 'rgba(255,255,255,0.44)',
-                                }}
+                    <div className="project-detail-main__body">
+                        <div className="project-task-toolbar">
+                            <input
+                                className="inp project-task-toolbar__search"
+                                value={taskSearch}
+                                onChange={(event) => setTaskSearch(event.target.value)}
+                                placeholder="Search tasks by title..."
+                            />
+
+                            <select
+                                className="inp project-task-toolbar__filter"
+                                value={deadlineFilter}
+                                onChange={(event) => setDeadlineFilter(event.target.value as TaskDeadlineFilter)}
                             >
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        gap: 12,
-                                        alignItems: 'center',
-                                        flexWrap: 'wrap',
+                                <option value="ALL">All deadlines</option>
+                                <option value="UPCOMING">Upcoming</option>
+                                <option value="OVERDUE">Overdue</option>
+                                <option value="NO_DEADLINE">No deadline</option>
+                            </select>
+
+                            {taskFiltersActive ? (
+                                <button
+                                    type="button"
+                                    className="btn btn--ghost"
+                                    onClick={() => {
+                                        setTaskSearch('')
+                                        setDeadlineFilter('ALL')
                                     }}
                                 >
-                                    <input
-                                        className="inp"
-                                        value={taskSearch}
-                                        onChange={(e) => setTaskSearch(e.target.value)}
-                                        placeholder="Search tasks by title..."
-                                        style={{ maxWidth: 320, margin: 0 }}
-                                    />
+                                    Clear
+                                </button>
+                            ) : null}
+                        </div>
 
-                                    <select
-                                        className="inp"
-                                        value={deadlineFilter}
-                                        onChange={(e) => setDeadlineFilter(e.target.value as TaskDeadlineFilter)}
-                                        style={{ maxWidth: 220, margin: 0 }}
-                                    >
-                                        <option value="ALL">All deadlines</option>
-                                        <option value="UPCOMING">Upcoming</option>
-                                        <option value="OVERDUE">Overdue</option>
-                                        <option value="NO_DEADLINE">No deadline</option>
-                                    </select>
-
-                                    {taskSearch.trim() || deadlineFilter !== 'ALL' ? (
-                                        <button
-                                            type="button"
-                                            className="btn btn--ghost"
-                                            onClick={() => {
-                                                setTaskSearch('')
-                                                setDeadlineFilter('ALL')
-                                            }}
-                                        >
-                                            Clear
-                                        </button>
-                                    ) : null}
+                        {tasks.length === 0 ? (
+                            <div className="empty project-empty-state">
+                                <div className="empty-icon">TS</div>
+                                <div className="empty-text">No tasks found</div>
+                                <div className="empty-sub">
+                                    {taskFiltersActive
+                                        ? 'Try another task title or change the deadline filter.'
+                                        : isTeacher
+                                            ? 'Create your first task.'
+                                            : 'Ask your teacher to add tasks.'}
                                 </div>
                             </div>
+                        ) : (
+                            <div className="project-task-list">
+                                {tasks.map((task: Task) => {
+                                    const submission = mySubs[task.id]
 
-                            {tasks.length === 0 ? (
-                                <div className="empty">
-                                    <div className="empty-icon">📝</div>
-                                    <div className="empty-text">No tasks found</div>
-                                    <div className="empty-sub">
-                                        {taskSearch.trim() || deadlineFilter !== 'ALL'
-                                            ? 'Try another task title or change the deadline filter.'
-                                            : mode === 'teacher'
-                                                ? 'Create your first task!'
-                                                : 'Ask your teacher to add tasks.'}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="tasks-grid">
-                                    {tasks.map((t: Task) => {
-                                        const sub = mySubs[t.id]
-
-                                        return (
-                                            <div key={t.id} className="task-card">
-                                                <div className="task-top">
-                                                    <div>
-                                                        <div className="task-title">{t.title}</div>
-                                                        <div className="task-desc">{t.description || 'No description'}</div>
-                                                    </div>
-
-                                                    {mode === 'student' ? (
-                                                        <span className={sub ? 'status-pill st-done' : 'status-pill st-open'}>
-                                                            {sub ? '✅ Submitted' : '⏳ Not submitted'}
+                                    return (
+                                        <article key={task.id} className="project-task-item">
+                                            <div className="project-task-item__main">
+                                                <div className="project-task-item__top">
+                                                    <h3>{task.title}</h3>
+                                                    {!isTeacher ? (
+                                                        <span className={submission ? 'status-pill st-done' : 'status-pill st-open'}>
+                                                            {submission ? 'Submitted' : 'Not submitted'}
                                                         </span>
                                                     ) : null}
                                                 </div>
 
-                                                <div className="task-meta">
-                                                    <span className="meta-pill">📅 {t.deadline || 'No deadline'}</span>
-                                                </div>
+                                                <p>{task.description || 'No description'}</p>
 
-                                                <div className="task-actions">
-                                                    <Link
-                                                        to={`/projects/${projectId}/tasks/${t.id}`}
-                                                        state={{ mode }}
-                                                        className="btn btn--ghost"
-                                                        style={{ textDecoration: 'none' }}
-                                                    >
-                                                        Open
-                                                    </Link>
-
-                                                    {mode === 'teacher' ? (
-                                                        <Link
-                                                            to={`/projects/${projectId}/tasks/${t.id}/submissions`}
-                                                            state={{ mode }}
-                                                            className="btn btn--primary"
-                                                            style={{ textDecoration: 'none' }}
-                                                        >
-                                                            Submissions →
-                                                        </Link>
-                                                    ) : (
-                                                        <Link
-                                                            to={`/projects/${projectId}/tasks/${t.id}`}
-                                                            state={{ mode }}
-                                                            className="btn btn--primary"
-                                                            style={{ textDecoration: 'none' }}
-                                                        >
-                                                            Submit / View answer →
-                                                        </Link>
-                                                    )}
+                                                <div className="project-task-item__meta">
+                                                    <span>{task.deadline || 'No deadline'}</span>
+                                                    <span>{task.maxScore} pts</span>
+                                                    {!isTeacher ? (
+                                                        <>
+                                                            <span>Teacher: {submission?.teacherScore ?? '-'}</span>
+                                                            <span>AI: {submission?.aiScore ?? '-'}</span>
+                                                        </>
+                                                    ) : null}
                                                 </div>
                                             </div>
-                                        )
-                                    })}
-                                </div>
-                            )}
-                        </>
-                    ) : null}
 
-                    {tab === 'create' && mode === 'teacher' ? (
-                        <div className="create-wrap">
-                            <div className="create-card">
-                                <div className="info-title">✨ Create a task</div>
-                                <div className="muted">
-                                    Fill out the fields below and publish it to your students.
-                                </div>
+                                            <div className="project-task-item__actions">
+                                                {isTeacher ? (
+                                                    <>
+                                                        <Link
+                                                            to={`/projects/${projectId}/tasks/${task.id}`}
+                                                            state={{ mode }}
+                                                            className="btn btn--ghost"
+                                                        >
+                                                            Open
+                                                        </Link>
 
-                                <div style={{ height: 12 }} />
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn--ghost"
+                                                            onClick={() => void openTaskEditor(task)}
+                                                            disabled={loading}
+                                                        >
+                                                            Edit
+                                                        </button>
 
-                                <input
-                                    className="inp"
-                                    value={tTitle}
-                                    onChange={(e) => setTTitle(e.target.value)}
-                                    placeholder="Task title"
-                                />
-
-                                <textarea
-                                    className="inp"
-                                    value={tDesc}
-                                    onChange={(e) => setTDesc(e.target.value)}
-                                    placeholder="Description (optional)"
-                                />
-
-                                <div className="row2">
-                                    <input
-                                        className="inp"
-                                        type="date"
-                                        value={tDeadline}
-                                        onChange={(e) => setTDeadline(e.target.value)}
-                                    />
-
-                                    <input
-                                        className="inp"
-                                        type="number"
-                                        min={0}
-                                        max={1000}
-                                        value={tMaxScore}
-                                        onChange={(e) => setTMaxScore(Number(e.target.value))}
-                                        placeholder="Max score"
-                                    />
-                                </div>
-
-                                <label
-                                    className="tasko-field"
-                                    style={{
-                                        display: 'flex',
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        gap: 10,
-                                        marginTop: 4,
-                                    }}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={tAllowResubmissionAfterGrade}
-                                        onChange={(e) => setTAllowResubmissionAfterGrade(e.target.checked)}
-                                    />
-                                    <span>Allow resubmission after grading</span>
-                                </label>
-
-                                <button
-                                    className="btn-primary"
-                                    onClick={createTask}
-                                    disabled={loading || !tTitle.trim()}
-                                    type="button"
-                                >
-                                    Create ✨
-                                </button>
+                                                        <Link
+                                                            to={`/projects/${projectId}/tasks/${task.id}/submissions`}
+                                                            state={{ mode }}
+                                                            className="btn btn--primary"
+                                                        >
+                                                            Submissions
+                                                        </Link>
+                                                    </>
+                                                ) : (
+                                                    <Link
+                                                        to={`/projects/${projectId}/tasks/${task.id}`}
+                                                        state={{ mode }}
+                                                        className="btn btn--primary"
+                                                    >
+                                                        Submit
+                                                    </Link>
+                                                )}
+                                            </div>
+                                        </article>
+                                    )
+                                })}
                             </div>
-                        </div>
-                    ) : null}
-                </div>
+                        )}
+                    </div>
+                </main>
             </div>
+
+            <ProjectEditModal
+                open={editOpen}
+                project={project}
+                onClose={() => setEditOpen(false)}
+                onUpdated={handleProjectUpdated}
+            />
+
+            <TaskCreateModal
+                open={taskCreateOpen}
+                projectId={projectIdNum}
+                onClose={() => setTaskCreateOpen(false)}
+                onCreated={handleTaskCreated}
+            />
+
+            <TaskEditModal
+                open={taskEditOpen}
+                projectId={projectIdNum}
+                task={editingTask}
+                onClose={() => setTaskEditOpen(false)}
+                onUpdated={handleTaskUpdated}
+            />
         </div>
     )
-}
-
-function hash(s: string): number {
-    let h = 0
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
-    return h
 }

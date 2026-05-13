@@ -142,7 +142,7 @@ public class SubmissionService {
 
         Submission saved = submissionRepository.save(submission);
 
-        notificationService.submissionGraded(saved.getId());
+        runAfterCommit(() -> notificationService.submissionGraded(saved.getId()));
 
         return toResponse(saved);
     }

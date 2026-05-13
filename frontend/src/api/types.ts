@@ -7,6 +7,7 @@ export type Me = {
 export type Project = {
     id: number
     name: string
+    emoji?: string | null
     description?: string | null
     deadline?: string | null
     joinCode?: string | null

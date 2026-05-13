@@ -1,11 +1,8 @@
 import { useState } from 'react'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { authApi } from '../api/auth.api'
+import { getApiErrorMessage } from '../api/http'
 import { Link } from 'react-router-dom'
-
-function errMsg(e: any): string {
-    return e?.message ?? String(e)
-}
 
 export default function ProfilePage() {
     const auth = useAuth()
@@ -39,7 +36,7 @@ export default function ProfilePage() {
 
             setSuccess('Profile updated successfully!')
         } catch (e) {
-            setError(errMsg(e))
+            setError(getApiErrorMessage(e, 'Failed to update profile'))
         } finally {
             setSaving(false)
         }

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { projectsApi } from '../api/projects.api'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
+import ProjectCreateModal from './ProjectCreateModal'
+import ProjectJoinModal from './ProjectJoinModal'
 
 type ActiveModal = 'create' | 'join' | null
 
@@ -9,79 +10,18 @@ export default function ProjectsHubPage() {
     const auth = useAuth()
 
     const [activeModal, setActiveModal] = useState<ActiveModal>(null)
-
-    const [name, setName] = useState('')
-    const [description, setDescription] = useState('')
-    const [deadline, setDeadline] = useState('')
-    const [joinCode, setJoinCode] = useState('')
-
-    const [loading, setLoading] = useState(false)
-    const [err, setErr] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
 
     const firstName = auth.me?.name?.trim()?.split(' ')[0] || 'there'
 
-    const closeModal = () => {
-        if (loading) return
-        setActiveModal(null)
-        setErr(null)
-    }
-
     const openCreateModal = () => {
-        setErr(null)
         setSuccess(null)
         setActiveModal('create')
     }
 
     const openJoinModal = () => {
-        setErr(null)
         setSuccess(null)
         setActiveModal('join')
-    }
-
-    const create = async () => {
-        if (!name.trim()) return
-
-        setLoading(true)
-        setErr(null)
-        setSuccess(null)
-
-        try {
-            await projectsApi.create({
-                name: name.trim(),
-                description: description.trim() ? description.trim() : null,
-                deadline: deadline || null,
-            })
-
-            setName('')
-            setDescription('')
-            setDeadline('')
-            setActiveModal(null)
-            setSuccess('Project created successfully.')
-        } catch (error: any) {
-            setErr(error?.message ?? error?.response?.data?.message ?? 'Could not create the project.')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const join = async () => {
-        if (!joinCode.trim()) return
-
-        setLoading(true)
-        setErr(null)
-        setSuccess(null)
-
-        try {
-            await projectsApi.joinByCode({ joinCode: joinCode.trim() })
-            setJoinCode('')
-            setActiveModal(null)
-            setSuccess('You joined the project successfully.')
-        } catch (error: any) {
-            setErr(error?.message ?? error?.response?.data?.message ?? 'Could not join the project.')
-        } finally {
-            setLoading(false)
-        }
     }
 
     return (
@@ -98,7 +38,6 @@ export default function ProjectsHubPage() {
                 </p>
             </section>
 
-            {err ? <div className="alert alert--error tasko-hub__alert">{err}</div> : null}
             {success ? <div className="alert tasko-hub__alert">{success}</div> : null}
 
             <section className="tasko-hub__grid">
@@ -171,140 +110,17 @@ export default function ProjectsHubPage() {
                 </Link>
             </section>
 
-            {activeModal === 'create' ? (
-                <div className="tasko-modal-backdrop" onMouseDown={closeModal}>
-                    <section className="tasko-modal" onMouseDown={(event) => event.stopPropagation()}>
-                        <div className="tasko-modal__header">
-                            <div>
-                                <div className="tasko-modal__eyebrow">New project</div>
-                                <h2 className="tasko-modal__title">Create project</h2>
-                            </div>
+            <ProjectCreateModal
+                open={activeModal === 'create'}
+                onClose={() => setActiveModal(null)}
+                onCreated={() => setSuccess('Project created successfully.')}
+            />
 
-                            <button
-                                type="button"
-                                className="tasko-modal__close"
-                                onClick={closeModal}
-                                aria-label="Close"
-                            >
-                                x
-                            </button>
-                        </div>
-
-                        <div className="tasko-modal__body">
-                            <label className="tasko-field">
-                                <span>Project name</span>
-                                <input
-                                    className="inp"
-                                    value={name}
-                                    onChange={(event) => setName(event.target.value)}
-                                    placeholder="For example: Web Design Lab"
-                                />
-                            </label>
-
-                            <label className="tasko-field">
-                                <span>Description</span>
-                                <textarea
-                                    className="inp"
-                                    value={description}
-                                    onChange={(event) => setDescription(event.target.value)}
-                                    placeholder="Briefly describe what this project is about"
-                                />
-                            </label>
-
-                            <label className="tasko-field">
-                                <span>Deadline</span>
-                                <input
-                                    className="inp"
-                                    type="date"
-                                    value={deadline}
-                                    onChange={(event) => setDeadline(event.target.value)}
-                                />
-                            </label>
-                        </div>
-
-                        <div className="tasko-modal__footer">
-                            <button
-                                type="button"
-                                className="btn btn--ghost"
-                                onClick={closeModal}
-                                disabled={loading}
-                            >
-                                Cancel
-                            </button>
-
-                            <button
-                                type="button"
-                                className="btn btn--primary"
-                                onClick={create}
-                                disabled={loading || !name.trim()}
-                            >
-                                {loading ? 'Creating...' : 'Create project'}
-                            </button>
-                        </div>
-                    </section>
-                </div>
-            ) : null}
-
-            {activeModal === 'join' ? (
-                <div className="tasko-modal-backdrop" onMouseDown={closeModal}>
-                    <section className="tasko-modal tasko-modal--small" onMouseDown={(event) => event.stopPropagation()}>
-                        <div className="tasko-modal__header">
-                            <div>
-                                <div className="tasko-modal__eyebrow">Invite code</div>
-                                <h2 className="tasko-modal__title">Join project</h2>
-                            </div>
-
-                            <button
-                                type="button"
-                                className="tasko-modal__close"
-                                onClick={closeModal}
-                                aria-label="Close"
-                            >
-                                x
-                            </button>
-                        </div>
-
-                        <div className="tasko-modal__body">
-                            <label className="tasko-field">
-                                <span>Project code</span>
-                                <input
-                                    className="inp"
-                                    value={joinCode}
-                                    onChange={(event) => setJoinCode(event.target.value)}
-                                    placeholder="Enter the project code"
-                                />
-                            </label>
-
-                            <div className="hint-box">
-                                <div className="hint-title">Hint</div>
-                                <div className="hint-text">
-                                    Ask your teacher or project owner for the invite code.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="tasko-modal__footer">
-                            <button
-                                type="button"
-                                className="btn btn--ghost"
-                                onClick={closeModal}
-                                disabled={loading}
-                            >
-                                Cancel
-                            </button>
-
-                            <button
-                                type="button"
-                                className="btn btn--primary green"
-                                onClick={join}
-                                disabled={loading || !joinCode.trim()}
-                            >
-                                {loading ? 'Joining...' : 'Join project'}
-                            </button>
-                        </div>
-                    </section>
-                </div>
-            ) : null}
+            <ProjectJoinModal
+                open={activeModal === 'join'}
+                onClose={() => setActiveModal(null)}
+                onJoined={() => setSuccess('You joined the project successfully.')}
+            />
         </div>
     )
 }

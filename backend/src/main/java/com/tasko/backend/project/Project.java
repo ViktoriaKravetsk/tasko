@@ -27,14 +27,20 @@ public class Project {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Builder.Default
+    @Column(nullable = false, length = 16)
+    private String emoji = "📁";
+
     private LocalDate deadline;
 
     @Column(name = "join_code", nullable = false, unique = true, length = 16)
     private String joinCode;
 
+    @Builder.Default
     @Column(name = "join_enabled", nullable = false)
     private boolean joinEnabled = true;
 
+    @Builder.Default
     @Column(nullable = false)
     private boolean active = true;
 
@@ -55,6 +61,11 @@ public class Project {
     private void normalize() {
         if (joinCode != null) joinCode = joinCode.trim().toUpperCase();
         if (name != null) name = name.trim();
+        if (emoji == null || emoji.isBlank()) {
+            emoji = "📁";
+        } else {
+            emoji = emoji.trim();
+        }
         if (description != null) {
             String d = description.trim();
             description = d.isBlank() ? null : d;

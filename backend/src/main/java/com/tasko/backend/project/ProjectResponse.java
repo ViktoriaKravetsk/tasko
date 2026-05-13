@@ -6,6 +6,7 @@ import java.time.LocalDate;
 public record ProjectResponse(
         Long id,
         String name,
+        String emoji,
         String description,
         LocalDate deadline,
         String joinCode,

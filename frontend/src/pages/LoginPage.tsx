@@ -1,4 +1,4 @@
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { BackgroundDecor } from '../layout/BackgroundDecor'
 
 export default function LoginPage() {

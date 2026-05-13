@@ -9,9 +9,13 @@ import com.tasko.backend.task.TaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 
@@ -20,6 +24,9 @@ import java.util.Objects;
 public class ProjectService {
 
     private static final String JOIN_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static final int MAX_PROJECT_PAGE_SIZE = 9;
+    private static final int PROJECT_DESCRIPTION_MAX_LENGTH = 200;
+    private static final int PROJECT_DESCRIPTION_MAX_SEGMENT_LENGTH = 40;
 
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository memberRepository;
@@ -33,15 +40,18 @@ public class ProjectService {
         }
 
         String name = trimRequired(req.name(), "name is required");
-        String description = trimToNull(req.description());
+        String emoji = normalizeEmoji(req.emoji());
+        String description = trimDescription(req.description());
+        LocalDate deadline = validateDeadline(req.deadline());
 
         String code = generateUniqueJoinCode(8);
 
         Project saved = projectRepository.save(Project.builder()
                 .ownerId(ownerId)
                 .name(name)
+                .emoji(emoji)
                 .description(description)
-                .deadline(req.deadline())
+                .deadline(deadline)
                 .joinCode(code)
                 .joinEnabled(true)
                 .active(true)
@@ -67,6 +77,37 @@ public class ProjectService {
         return projects.stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ProjectPageResponse listMyPage(Long ownerId, String search, int page, int size) {
+        String normalizedSearch = normalizeSearch(search);
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), MAX_PROJECT_PAGE_SIZE);
+
+        PageRequest pageable = PageRequest.of(
+                safePage,
+                safeSize,
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        Page<Project> projects = normalizedSearch == null
+                ? projectRepository.findByOwnerId(ownerId, pageable)
+                : projectRepository.findByOwnerIdAndNameContainingIgnoreCase(ownerId, normalizedSearch, pageable);
+
+        List<ProjectResponse> items = projects.stream()
+                .map(this::toResponse)
+                .toList();
+
+        return new ProjectPageResponse(
+                items,
+                projects.getNumber(),
+                projects.getSize(),
+                projects.getTotalElements(),
+                projects.getTotalPages(),
+                projects.isFirst(),
+                projects.isLast()
+        );
     }
 
     @Transactional
@@ -127,10 +168,45 @@ public class ProjectService {
         return v.isBlank() ? null : v;
     }
 
+    private String trimDescription(String value) {
+        String description = trimToNull(value);
+        if (description != null && description.length() > PROJECT_DESCRIPTION_MAX_LENGTH) {
+            throw new BadRequestException("Description must be " + PROJECT_DESCRIPTION_MAX_LENGTH + " characters or less");
+        }
+        if (description != null && hasTooLongSegment(description)) {
+            throw new BadRequestException("Description cannot contain a word or sequence longer than "
+                    + PROJECT_DESCRIPTION_MAX_SEGMENT_LENGTH + " characters");
+        }
+        return description;
+    }
+
+    private boolean hasTooLongSegment(String value) {
+        for (String segment : value.trim().split("\\s+")) {
+            if (segment.length() > PROJECT_DESCRIPTION_MAX_SEGMENT_LENGTH) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private LocalDate validateDeadline(LocalDate value) {
+        if (value != null && value.isBefore(LocalDate.now())) {
+            throw new BadRequestException("Deadline cannot be earlier than today");
+        }
+        return value;
+    }
+
     private String normalizeSearch(String value) {
         if (value == null) return null;
         String v = value.trim();
         return v.isBlank() ? null : v;
+    }
+
+    private String normalizeEmoji(String value) {
+        if (value == null) return "📁";
+        String v = value.trim();
+        if (v.isBlank()) return "📁";
+        return v.length() > 16 ? v.substring(0, 16) : v;
     }
 
     private String generateUniqueJoinCode(int len) {
@@ -147,6 +223,7 @@ public class ProjectService {
         return new ProjectResponse(
                 p.getId(),
                 p.getName(),
+                p.getEmoji(),
                 p.getDescription(),
                 p.getDeadline(),
                 p.getJoinCode(),
@@ -164,6 +241,27 @@ public class ProjectService {
         int earned = submissionRepository.sumEarnedScore(projectId, userId);
 
         return new ProjectProgressResponse(projectId, earned, total);
+    }
+
+    @Transactional
+    public ProjectResponse updateProject(Long userId, Long projectId, ProjectUpdateRequest req) {
+        if (req == null) {
+            throw new BadRequestException("Request is required");
+        }
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found"));
+
+        if (!project.getOwnerId().equals(userId)) {
+            throw new ForbiddenException("Only owner can edit project");
+        }
+
+        project.setName(trimRequired(req.name(), "name is required"));
+        project.setEmoji(normalizeEmoji(req.emoji()));
+        project.setDescription(trimDescription(req.description()));
+        project.setDeadline(validateDeadline(req.deadline()));
+
+        return toResponse(projectRepository.save(project));
     }
 
     @Transactional

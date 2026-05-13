@@ -9,6 +9,8 @@ export type TaskCreateRequest = {
     allowResubmissionAfterGrade?: boolean
 }
 
+export type TaskUpdateRequest = TaskCreateRequest
+
 export type TaskDeadlineFilter = 'ALL' | 'UPCOMING' | 'OVERDUE' | 'NO_DEADLINE'
 
 function buildQuery(params: Record<string, string | undefined | null>) {
@@ -45,6 +47,12 @@ export const tasksApi = {
     create: (projectId: number, body: TaskCreateRequest) =>
         api<Task>(`/api/projects/${projectId}/tasks`, {
             method: 'POST',
+            body: JSON.stringify(body),
+        }),
+
+    update: (projectId: number, taskId: number, body: TaskUpdateRequest) =>
+        api<Task>(`/api/projects/${projectId}/tasks/${taskId}`, {
+            method: 'PUT',
             body: JSON.stringify(body),
         }),
 

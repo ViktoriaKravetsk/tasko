@@ -1,6 +1,8 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
-import { useAuth } from '../auth/AuthContext'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { MouseEvent } from 'react'
+import { useAuth } from '../auth/useAuth'
+import { notificationsApi, type AppNotification } from '../api/notifications.api'
 import { BackgroundDecor } from './BackgroundDecor'
 import './shell-retro.css'
 
@@ -23,19 +25,73 @@ export default function AppShell() {
     const auth = useAuth()
     const navigate = useNavigate()
     const [open, setOpen] = useState(false)
+    const [notificationsOpen, setNotificationsOpen] = useState(false)
+    const [notifications, setNotifications] = useState<AppNotification[]>([])
+    const [unreadCount, setUnreadCount] = useState(0)
+    const [notificationsLoading, setNotificationsLoading] = useState(false)
+    const [notificationsError, setNotificationsError] = useState<string | null>(null)
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
+    const notificationsRef = useRef<HTMLDivElement | null>(null)
     const petalsRef = useRef<Petal[]>([])
     const rafRef = useRef<number | null>(null)
+
+    const loadNotifications = useCallback(async () => {
+        if (!auth.me) return
+
+        setNotificationsLoading(true)
+        setNotificationsError(null)
+
+        try {
+            const [items, count] = await Promise.all([
+                notificationsApi.list(),
+                notificationsApi.unreadCount(),
+            ])
+
+            setNotifications(items)
+            setUnreadCount(count)
+        } catch {
+            setNotificationsError('Could not load notifications.')
+        } finally {
+            setNotificationsLoading(false)
+        }
+    }, [auth.me])
 
     useEffect(() => {
         const onKey = (event: KeyboardEvent) => {
             if (event.key === 'Escape') setOpen(false)
+            if (event.key === 'Escape') setNotificationsOpen(false)
         }
 
         window.addEventListener('keydown', onKey)
         return () => window.removeEventListener('keydown', onKey)
     }, [])
+
+    useEffect(() => {
+        if (!auth.me) {
+            setNotifications([])
+            setUnreadCount(0)
+            return
+        }
+
+        void loadNotifications()
+        const interval = window.setInterval(() => void loadNotifications(), 30000)
+
+        return () => window.clearInterval(interval)
+    }, [auth.me, loadNotifications])
+
+    useEffect(() => {
+        if (!notificationsOpen) return
+
+        const onPointerDown = (event: PointerEvent) => {
+            const target = event.target as Node | null
+            if (!target || notificationsRef.current?.contains(target)) return
+            setNotificationsOpen(false)
+        }
+
+        window.addEventListener('pointerdown', onPointerDown)
+        return () => window.removeEventListener('pointerdown', onPointerDown)
+    }, [notificationsOpen])
 
     useEffect(() => {
         const canvas = canvasRef.current
@@ -141,8 +197,57 @@ export default function AppShell() {
 
     const goToProfile = () => {
         setOpen(false)
+        setNotificationsOpen(false)
         navigate('/profile')
     }
+
+    const toggleNotifications = () => {
+        setOpen(false)
+        setNotificationsOpen((current) => {
+            const next = !current
+            if (next) void loadNotifications()
+            return next
+        })
+    }
+
+    const openNotification = async (notification: AppNotification) => {
+        setNotificationsOpen(false)
+
+        if (!notification.readAt) {
+            const readAt = new Date().toISOString()
+            setNotifications((current) =>
+                current.map((item) => item.id === notification.id ? { ...item, readAt } : item)
+            )
+            setUnreadCount((current) => Math.max(0, current - 1))
+            await notificationsApi.markRead(notification.id).catch(() => undefined)
+        }
+
+        if (notification.href) {
+            navigate(notification.href)
+        }
+    }
+
+    const markAllNotificationsRead = async () => {
+        await notificationsApi.markAllRead()
+        const readAt = new Date().toISOString()
+        setNotifications((current) => current.map((item) => ({ ...item, readAt })))
+        setUnreadCount(0)
+    }
+
+    const deleteNotification = async (event: MouseEvent<HTMLButtonElement>, notification: AppNotification) => {
+        event.stopPropagation()
+
+        setNotifications((current) => current.filter((item) => item.id !== notification.id))
+        if (!notification.readAt) {
+            setUnreadCount((current) => Math.max(0, current - 1))
+        }
+
+        await notificationsApi.delete(notification.id).catch(() => {
+            void loadNotifications()
+        })
+    }
+
+    const currentYear = new Date().getFullYear()
 
     return (
         <div className={open ? 'shell shell--open' : 'shell'}>
@@ -179,7 +284,96 @@ export default function AppShell() {
 
                 <div className="topbar__center" />
 
-                <div className="user">
+                <div className="topbar__right">
+                    <div className="notifications" ref={notificationsRef}>
+                        <button
+                            type="button"
+                            className={unreadCount > 0 ? 'notification-button notification-button--active' : 'notification-button'}
+                            onClick={toggleNotifications}
+                            aria-label="Notifications"
+                            aria-expanded={notificationsOpen}
+                        >
+                            <svg
+                                className="notification-button__icon"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                                focusable="false"
+                            >
+                                <path d="M18 9.5a6 6 0 0 0-12 0c0 6-2.5 7.5-2.5 7.5h17S18 15.5 18 9.5Z" />
+                                <path d="M9.5 20a2.8 2.8 0 0 0 5 0" />
+                                <path d="M12 3.5V2" />
+                            </svg>
+                            {unreadCount > 0 ? (
+                                <span className="notification-button__count">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                            ) : null}
+                        </button>
+
+                        {notificationsOpen ? (
+                            <div className="notifications-panel">
+                                <div className="notifications-panel__head">
+                                    <div>
+                                        <div className="notifications-panel__title">Notifications</div>
+                                        <div className="notifications-panel__sub">
+                                            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                                        </div>
+                                    </div>
+
+                                    {unreadCount > 0 ? (
+                                        <button
+                                            type="button"
+                                            className="notifications-panel__mark"
+                                            onClick={() => void markAllNotificationsRead()}
+                                        >
+                                            Mark all read
+                                        </button>
+                                    ) : null}
+                                </div>
+
+                                <div className="notifications-panel__body">
+                                    {notificationsLoading ? (
+                                        <div className="notifications-empty">Loading...</div>
+                                    ) : notificationsError ? (
+                                        <div className="notifications-empty">{notificationsError}</div>
+                                    ) : notifications.length === 0 ? (
+                                        <div className="notifications-empty">No notifications yet.</div>
+                                    ) : (
+                                        notifications.map((notification) => (
+                                            <div
+                                                key={notification.id}
+                                                className={notification.readAt ? 'notification-item' : 'notification-item notification-item--unread'}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    className="notification-item__open"
+                                                    onClick={() => void openNotification(notification)}
+                                                >
+                                                    <span className="notification-item__dot" aria-hidden="true" />
+                                                    <span className="notification-item__content">
+                                                        <span className="notification-item__title">{notification.title}</span>
+                                                        <span className="notification-item__message">{notification.message}</span>
+                                                        <span className="notification-item__time">
+                                                            {formatNotificationTime(notification.createdAt)}
+                                                        </span>
+                                                    </span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="notification-item__delete"
+                                                    onClick={(event) => void deleteNotification(event, notification)}
+                                                    aria-label="Delete notification"
+                                                    title="Delete"
+                                                >
+                                                    x
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        ) : null}
+                    </div>
+
+                    <div className="user">
                     <button
                         type="button"
                         className="user__profile-link"
@@ -197,6 +391,7 @@ export default function AppShell() {
                             <span className="user__email">{auth.me?.email ?? ''}</span>
                         </span>
                     </button>
+                    </div>
                 </div>
             </header>
 
@@ -259,10 +454,24 @@ export default function AppShell() {
             <footer className="app-footer">
                 <div className="app-footer__inner">
                     <span className="app-footer__brand">Tasko</span>
-                    <span>Learning projects, submissions, and feedback in one place.</span>
-                    <span className="app-footer__meta">Built for focused classroom work.</span>
+                    <span className="app-footer__credit">Developed by Viktoriia Kravetska</span>
+                    <span className="app-footer__meta">{currentYear}</span>
                 </div>
             </footer>
         </div>
     )
+}
+
+function formatNotificationTime(value?: string | null) {
+    if (!value) return ''
+
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+
+    return new Intl.DateTimeFormat('uk-UA', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(date)
 }

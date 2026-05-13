@@ -1,16 +1,7 @@
-import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { authApi } from '../api/auth.api'
 import type { Me } from '../api/types'
-
-type AuthState = {
-    isReady: boolean
-    me: Me | null
-    loginWithGoogle: () => void
-    logout: () => Promise<void>
-    refresh: () => Promise<void>
-}
-
-const AuthContext = createContext<AuthState | null>(null)
+import { AuthContext, type AuthState } from './auth-context'
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [isReady, setIsReady] = useState(false)
@@ -50,10 +41,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     )
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-    const ctx = useContext(AuthContext)
-    if (!ctx) throw new Error('useAuth must be used within AuthProvider')
-    return ctx
 }

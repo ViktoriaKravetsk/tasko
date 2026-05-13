@@ -1,18 +1,22 @@
-import { useMemo, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Project } from '../api/types'
+import { DEFAULT_PROJECT_EMOJI } from './projectEmojiOptions'
 
 type Props = {
     title: string
-    subtitle: string
+    subtitle?: string
     projects: Project[]
-    copied: string | null
-    onCopy: (text: string) => Promise<void> | void
+    copied?: string | null
+    onCopy?: (text: string) => Promise<void> | void
     emptyIcon: string
     emptyText: string
     emptySub: string
     badgeClassName: string
+    badgeLabel?: string | number
+    showJoinCode?: boolean
+    headerSlot?: ReactNode
+    footerSlot?: ReactNode
 }
 
 export default function ProjectCardsSection({
@@ -25,27 +29,12 @@ export default function ProjectCardsSection({
                                                 emptyText,
                                                 emptySub,
                                                 badgeClassName,
+                                                badgeLabel,
+                                                showJoinCode = true,
+                                                headerSlot,
+                                                footerSlot,
                                             }: Props) {
     const navigate = useNavigate()
-
-    const [emojis] = useState([
-        '📚',
-        '🎨',
-        '🔬',
-        '🚀',
-        '💡',
-        '🎯',
-        '🌍',
-        '🎵',
-        '🖌️',
-        '⚽',
-        '🧠',
-        '🔭',
-    ])
-
-    const emojiFor = useMemo(() => {
-        return (id: number) => emojis[Math.abs(hash(String(id))) % emojis.length]
-    }, [emojis])
 
     const openProject = (project: Project) => {
         navigate(`/projects/${project.id}`, { state: { project } })
@@ -66,7 +55,9 @@ export default function ProjectCardsSection({
                     {subtitle ? <div className="panel-sub">{subtitle}</div> : null}
                 </div>
 
-                <span className={`count-pill ${badgeClassName}`}>{projects.length}</span>
+                {headerSlot}
+
+                <span className={`count-pill ${badgeClassName}`}>{badgeLabel ?? projects.length}</span>
             </div>
 
             <div className="panel-body">
@@ -88,14 +79,20 @@ export default function ProjectCardsSection({
                                 onClick={() => openProject(project)}
                                 onKeyDown={(event) => handleProjectKeyDown(event, project)}
                             >
-                                <div className="project-card-emoji">{emojiFor(project.id)}</div>
+                                <div
+                                    className="project-card-mark project-card-mark--emoji"
+                                    data-tone={getProjectTone(project.id)}
+                                    aria-hidden="true"
+                                >
+                                    <span>{project.emoji?.trim() || DEFAULT_PROJECT_EMOJI}</span>
+                                </div>
 
                                 <div className="project-card-name">
                                     {project.name}
                                 </div>
 
-                                <div className="project-card-desc">
-                                    {project.description ?? 'No description'}
+                                <div className="project-card-desc" title={project.description ?? undefined}>
+                                    {project.description?.trim() || 'No description'}
                                 </div>
 
                                 <div className="project-card-meta">
@@ -103,7 +100,7 @@ export default function ProjectCardsSection({
                                         {project.deadline ?? 'No deadline'}
                                     </span>
 
-                                    {project.joinCode ? (
+                                    {showJoinCode && project.joinCode && onCopy ? (
                                         <button
                                             type="button"
                                             className="count-pill count-pill--pink"
@@ -113,7 +110,7 @@ export default function ProjectCardsSection({
                                                 void onCopy(project.joinCode ?? '')
                                             }}
                                         >
-                                            {copied === project.joinCode ? 'Copied ✓' : `${project.joinCode} 📋`}
+                                            {copied === project.joinCode ? 'Copied' : project.joinCode}
                                         </button>
                                     ) : null}
                                 </div>
@@ -121,9 +118,15 @@ export default function ProjectCardsSection({
                         ))}
                     </div>
                 )}
+
+                {footerSlot}
             </div>
         </section>
     )
+}
+
+function getProjectTone(id: number): number {
+    return Math.abs(hash(String(id))) % 4
 }
 
 function hash(value: string): number {

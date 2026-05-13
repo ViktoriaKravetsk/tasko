@@ -12,6 +12,8 @@ import com.tasko.backend.submission.SubmissionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -44,7 +46,7 @@ public class TaskService {
                 .status(TaskStatus.TODO)
                 .build());
 
-        notificationService.taskCreated(saved.getId());
+        runAfterCommit(() -> notificationService.taskCreated(saved.getId()));
         return toResponse(saved);
     }
 
@@ -99,8 +101,8 @@ public class TaskService {
                 .orElseThrow(() -> new NotFoundException("Task not found"));
 
         if (req.title() != null) task.setTitle(normalizeRequired(req.title(), "Title is required"));
-        if (req.description() != null) task.setDescription(normalizeNullable(req.description()));
-        if (req.deadline() != null) task.setDeadline(req.deadline());
+        task.setDescription(normalizeNullable(req.description()));
+        task.setDeadline(req.deadline());
         if (req.maxScore() != null) task.setMaxScore(req.maxScore());
         if (req.allowResubmissionAfterGrade() != null) {
             task.setAllowResubmissionAfterGrade(req.allowResubmissionAfterGrade());
@@ -177,13 +179,30 @@ public class TaskService {
         return value == null || value;
     }
 
+    private void runAfterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            action.run();
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
+    }
+
     private TaskShortResponse toShortResponse(Task t) {
         return new TaskShortResponse(
                 t.getId(),
                 t.getProjectId(),
                 t.getTitle(),
+                t.getDescription(),
                 t.getStatus(),
                 t.getDeadline(),
+                t.getMaxScore(),
+                t.isAllowResubmissionAfterGrade(),
                 t.getCreatedAt(),
                 t.getUpdatedAt()
         );

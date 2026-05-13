@@ -14,6 +14,10 @@ export class ApiError extends Error {
     }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null
+}
+
 function getCookie(name: string): string | null {
     const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
     return match ? decodeURIComponent(match[2]) : null
@@ -33,6 +37,51 @@ function getErrorMessage(data: unknown, fallback: string): string {
     }
 
     return fallback
+}
+
+function getNestedErrorMessage(error: unknown): string | null {
+    if (!isRecord(error)) return null
+
+    const directMessage = getErrorMessage(error, '')
+    if (directMessage) return directMessage
+
+    const response = error.response
+    if (isRecord(response)) {
+        const responseMessage = getErrorMessage(response.data, '')
+        if (responseMessage) return responseMessage
+    }
+
+    return null
+}
+
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof ApiError && error.message.trim()) {
+        return error.message
+    }
+
+    const nestedMessage = getNestedErrorMessage(error)
+    if (nestedMessage) return nestedMessage
+
+    if (error instanceof Error && error.message.trim()) {
+        return error.message
+    }
+
+    return fallback
+}
+
+export function getApiErrorStatus(error: unknown): number | null {
+    if (error instanceof ApiError) return error.status
+
+    if (!isRecord(error)) return null
+
+    if (typeof error.status === 'number') return error.status
+
+    const response = error.response
+    if (isRecord(response) && typeof response.status === 'number') {
+        return response.status
+    }
+
+    return null
 }
 
 export async function api<T>(url: string, init: RequestInit = {}): Promise<T> {

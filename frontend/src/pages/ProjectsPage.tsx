@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getApiErrorMessage } from '../api/http'
 import { projectsApi } from '../api/projects.api'
 import type { Project } from '../api/types'
 
@@ -31,7 +32,7 @@ export default function ProjectsPage() {
         return () => window.clearTimeout(timeout)
     }, [search])
 
-    const load = async (searchValue?: string) => {
+    const load = useCallback(async (searchValue?: string) => {
         setLoading(true)
         setErr(null)
 
@@ -45,16 +46,16 @@ export default function ProjectsPage() {
 
             setOwned(my)
             setEnrolled(enr)
-        } catch (e: any) {
-            setErr(e?.response?.data?.message ?? 'Failed to load projects')
+        } catch (e) {
+            setErr(getApiErrorMessage(e, 'Failed to load projects'))
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
 
     useEffect(() => {
         void load(debouncedSearch)
-    }, [debouncedSearch])
+    }, [load, debouncedSearch])
 
     const create = async () => {
         if (!name.trim()) return
@@ -73,8 +74,8 @@ export default function ProjectsPage() {
             setDescription('')
             setDeadline('')
             await load(debouncedSearch)
-        } catch (e: any) {
-            setErr(e?.response?.data?.message ?? 'Create failed')
+        } catch (e) {
+            setErr(getApiErrorMessage(e, 'Create failed'))
         } finally {
             setLoading(false)
         }
@@ -90,8 +91,8 @@ export default function ProjectsPage() {
             await projectsApi.joinByCode({ joinCode: joinCode.trim() })
             setJoinCode('')
             await load(debouncedSearch)
-        } catch (e: any) {
-            setErr(e?.response?.data?.message ?? 'Join failed')
+        } catch (e) {
+            setErr(getApiErrorMessage(e, 'Join failed'))
         } finally {
             setLoading(false)
         }

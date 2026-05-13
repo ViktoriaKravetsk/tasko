@@ -31,6 +31,16 @@ public class ProjectController {
         return projectService.listMy(principal.getUserId(), search);
     }
 
+    @GetMapping("/my/page")
+    public ProjectPageResponse myPage(
+            @AuthenticationPrincipal CurrentUser principal,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "9") int size
+    ) {
+        return projectService.listMyPage(principal.getUserId(), search, page, size);
+    }
+
     @PostMapping("/join")
     public ProjectResponse join(@AuthenticationPrincipal CurrentUser principal,
                                 @Valid @RequestBody ProjectJoinRequest req) {
@@ -51,6 +61,15 @@ public class ProjectController {
             @PathVariable Long projectId
     ) {
         return projectService.myProgress(principal.getUserId(), projectId);
+    }
+
+    @PutMapping("/{projectId}")
+    public ProjectResponse update(
+            @AuthenticationPrincipal CurrentUser principal,
+            @PathVariable Long projectId,
+            @Valid @RequestBody ProjectUpdateRequest req
+    ) {
+        return projectService.updateProject(principal.getUserId(), projectId, req);
     }
 
     @DeleteMapping("/{projectId}")
