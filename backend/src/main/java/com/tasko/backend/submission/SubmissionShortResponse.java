@@ -10,5 +10,8 @@ public record SubmissionShortResponse(
         Instant submittedAt,
         boolean late,
         Integer teacherScore,
-        Instant gradedAt
+        Instant gradedAt,
+        Integer aiScore,
+        AiEvaluationStatus aiStatus,
+        SubmissionStatus status
 ) {}

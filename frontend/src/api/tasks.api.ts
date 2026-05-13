@@ -6,6 +6,7 @@ export type TaskCreateRequest = {
     description?: string | null
     deadline?: string | null
     maxScore: number
+    allowResubmissionAfterGrade?: boolean
 }
 
 export type TaskDeadlineFilter = 'ALL' | 'UPCOMING' | 'OVERDUE' | 'NO_DEADLINE'

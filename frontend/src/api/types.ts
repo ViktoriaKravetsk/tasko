@@ -20,6 +20,7 @@ export type Task = {
     description?: string | null
     deadline?: string | null
     maxScore: number
+    allowResubmissionAfterGrade: boolean
     createdAt?: string
 }
 
@@ -37,12 +38,14 @@ export type Submission = {
     aiScore?: number | null
     aiComment?: string | null
     aiEvaluatedAt?: string | null
+    aiStatus?: 'PENDING' | 'DONE' | 'FAILED' | 'DISABLED'
+    aiErrorMessage?: string | null
     late?: boolean
     status?: 'SUBMITTED' | 'GRADED' | 'NOT_SUBMITTED'
 }
 
 export type SubmissionShort = {
-    id: number
+    id: number | null
     taskId: number
     studentId: number
     studentName?: string
@@ -50,6 +53,9 @@ export type SubmissionShort = {
     late?: boolean
     teacherScore?: number | null
     gradedAt?: string | null
+    aiScore?: number | null
+    aiStatus?: 'PENDING' | 'DONE' | 'FAILED' | 'DISABLED' | null
+    status?: 'SUBMITTED' | 'GRADED' | 'NOT_SUBMITTED'
 }
 
 export type ProjectProgress = {

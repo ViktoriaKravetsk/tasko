@@ -97,6 +97,78 @@ public class NotificationService {
 
     @Async
     @Transactional
+    public void submissionCreated(Long submissionId) {
+        submissionChanged(
+                submissionId,
+                NotificationType.SUBMISSION_CREATED,
+                "New submission",
+                "submitted work for review."
+        );
+    }
+
+    @Async
+    @Transactional
+    public void submissionUpdated(Long submissionId) {
+        submissionChanged(
+                submissionId,
+                NotificationType.SUBMISSION_UPDATED,
+                "Submission updated",
+                "updated a submitted work before grading."
+        );
+    }
+
+    @Async
+    @Transactional
+    public void submissionResubmittedAfterGrade(Long submissionId) {
+        submissionChanged(
+                submissionId,
+                NotificationType.SUBMISSION_RESUBMITTED_AFTER_GRADE,
+                "Graded submission updated",
+                "updated a graded work. The previous grade was cleared and this submission needs review again."
+        );
+    }
+
+    private void submissionChanged(Long submissionId, NotificationType type, String subjectPrefix, String actionText) {
+        if (!props.isEnabled()) return;
+
+        Submission s = submissionRepository.findById(submissionId).orElse(null);
+        if (s == null) return;
+
+        Task task = taskRepository.findById(s.getTaskId()).orElse(null);
+        if (task == null) return;
+
+        Project project = projectRepository.findById(task.getProjectId()).orElse(null);
+        if (project == null) return;
+
+        User owner = userRepository.findById(project.getOwnerId()).orElse(null);
+        if (owner == null || owner.getEmail() == null || owner.getEmail().isBlank()) return;
+
+        User student = userRepository.findById(s.getStudentId()).orElse(null);
+        String studentName = student == null ? "Unknown student" : student.getName();
+
+        String to = owner.getEmail();
+        String subject = subjectPrefix + ": " + task.getTitle();
+        String link = props.getFrontendBaseUrl()
+                + "/projects/" + project.getId()
+                + "/tasks/" + task.getId()
+                + "/submissions/" + s.getId();
+
+        String html = templateSubmissionChanged(
+                owner.getName(),
+                studentName,
+                project.getName(),
+                task.getTitle(),
+                actionText,
+                s.isLate(),
+                s.getSubmittedAt(),
+                link
+        );
+
+        sendWithLogging(type, to, s.getId(), subject, html);
+    }
+
+    @Async
+    @Transactional
     public void deadlineReminder(Long taskId, Long studentId) {
         if (!props.isEnabled()) return;
 
@@ -216,6 +288,44 @@ public class NotificationService {
                 maxScore == null ? "—" : maxScore.toString(),
                 teacherComment == null ? "" : "<p><b>Teacher comment:</b><br/>" + esc(teacherComment) + "</p>",
                 aiComment == null ? "" : "<p><b>AI feedback:</b><br/>" + esc(aiComment) + "</p>",
+                link,
+                esc(projectName)
+        );
+    }
+
+    private String templateSubmissionChanged(
+            String ownerName,
+            String studentName,
+            String projectName,
+            String taskTitle,
+            String actionText,
+            boolean late,
+            Instant submittedAt,
+            String link
+    ) {
+        return """
+                <div style="font-family:Arial,sans-serif;line-height:1.5">
+                  <h2>Submission update in Tasko</h2>
+                  <p>Hi %s,</p>
+                  <p><b>%s</b> %s</p>
+                  <ul>
+                    <li><b>Project:</b> %s</li>
+                    <li><b>Task:</b> %s</li>
+                    <li><b>Submitted at:</b> %s</li>
+                    <li><b>Late:</b> %s</li>
+                  </ul>
+                  <p><a href="%s" style="display:inline-block;padding:10px 14px;background:#111;color:#fff;text-decoration:none;border-radius:8px">Review submission</a></p>
+                  <hr/>
+                  <p style="color:#666;font-size:12px">You received this email because you own project "%s" in Tasko.</p>
+                </div>
+                """.formatted(
+                esc(ownerName),
+                esc(studentName),
+                esc(actionText),
+                esc(projectName),
+                esc(taskTitle),
+                submittedAt == null ? "-" : submittedAt.toString(),
+                late ? "yes" : "no",
                 link,
                 esc(projectName)
         );

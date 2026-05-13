@@ -6,5 +6,10 @@ public record TaskUpdateRequest(
         String title,
         String description,
         LocalDate deadline,
-        Integer maxScore
-) {}
+        Integer maxScore,
+        Boolean allowResubmissionAfterGrade
+) {
+    public TaskUpdateRequest(String title, String description, LocalDate deadline, Integer maxScore) {
+        this(title, description, deadline, maxScore, null);
+    }
+}

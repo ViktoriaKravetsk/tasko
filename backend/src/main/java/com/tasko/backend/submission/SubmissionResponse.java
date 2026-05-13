@@ -17,6 +17,8 @@ public record SubmissionResponse(
         Integer aiScore,
         String aiComment,
         Instant aiEvaluatedAt,
+        AiEvaluationStatus aiStatus,
+        String aiErrorMessage,
         SubmissionStatus status
 ) {}
 

@@ -98,7 +98,7 @@ export default function TaskSubmissionsPage() {
 
             {!loading && items.length === 0 ? (
                 <div className="card card--soft" style={{ marginTop: 12 }}>
-                    <h2>No submissions found</h2>
+                    <h2>No students found</h2>
                     <div className="small">
                         {debouncedSearch ? 'Try another student name.' : 'Students haven’t submitted anything for this task.'}
                     </div>
@@ -111,18 +111,25 @@ export default function TaskSubmissionsPage() {
                         <thead>
                         <tr>
                             <th>Student</th>
+                            <th>Status</th>
                             <th>Submitted</th>
+                            <th>Late</th>
+                            <th>AI</th>
                             <th>Score</th>
                             <th />
                         </tr>
                         </thead>
                         <tbody>
                         {items.map((s) => (
-                            <tr key={s.id}>
+                            <tr key={`${s.studentId}-${s.id ?? 'none'}`}>
                                 <td>{s.studentName ?? 'Unknown'}</td>
+                                <td>{s.status ?? 'NOT_SUBMITTED'}</td>
                                 <td>{s.submittedAt ?? '—'}</td>
+                                <td>{s.late ? 'Yes' : 'No'}</td>
+                                <td>{getAiLabel(s)}</td>
                                 <td>{s.teacherScore ?? '—'}</td>
                                 <td style={{ textAlign: 'right' }}>
+                                    {s.id != null ? (
                                     <Link
                                         to={`/projects/${pid}/tasks/${tid}/submissions/${s.id}`}
                                         state={{ mode }}
@@ -131,6 +138,9 @@ export default function TaskSubmissionsPage() {
                                     >
                                         Grade →
                                     </Link>
+                                    ) : (
+                                        <span className="small">No work</span>
+                                    )}
                                 </td>
                             </tr>
                         ))}
@@ -140,4 +150,12 @@ export default function TaskSubmissionsPage() {
             ) : null}
         </div>
     )
+}
+
+function getAiLabel(submission: SubmissionShort) {
+    if (submission.status === 'NOT_SUBMITTED') return '—'
+    if (submission.aiStatus === 'DONE') return submission.aiScore != null ? `Done (${submission.aiScore})` : 'Done'
+    if (submission.aiStatus === 'FAILED') return 'Failed'
+    if (submission.aiStatus === 'DISABLED') return 'Disabled'
+    return 'Pending'
 }

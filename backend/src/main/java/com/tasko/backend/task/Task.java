@@ -36,6 +36,10 @@ public class Task {
     @Min(1)
     private Integer maxScore;
 
+    @Builder.Default
+    @Column(name = "allow_resubmission_after_grade", nullable = false)
+    private boolean allowResubmissionAfterGrade = true;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private TaskStatus status;

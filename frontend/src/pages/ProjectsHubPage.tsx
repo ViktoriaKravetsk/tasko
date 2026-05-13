@@ -19,7 +19,7 @@ export default function ProjectsHubPage() {
     const [err, setErr] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
 
-    const firstName = auth.me?.name?.trim()?.split(' ')[0] || 'друже'
+    const firstName = auth.me?.name?.trim()?.split(' ')[0] || 'there'
 
     const closeModal = () => {
         if (loading) return
@@ -57,9 +57,9 @@ export default function ProjectsHubPage() {
             setDescription('')
             setDeadline('')
             setActiveModal(null)
-            setSuccess('Проєкт успішно створено.')
+            setSuccess('Project created successfully.')
         } catch (error: any) {
-            setErr(error?.response?.data?.message ?? 'Не вдалося створити проєкт.')
+            setErr(error?.message ?? error?.response?.data?.message ?? 'Could not create the project.')
         } finally {
             setLoading(false)
         }
@@ -76,9 +76,9 @@ export default function ProjectsHubPage() {
             await projectsApi.joinByCode({ joinCode: joinCode.trim() })
             setJoinCode('')
             setActiveModal(null)
-            setSuccess('Ти успішно приєдналась до проєкту.')
+            setSuccess('You joined the project successfully.')
         } catch (error: any) {
-            setErr(error?.response?.data?.message ?? 'Не вдалося приєднатися до проєкту.')
+            setErr(error?.message ?? error?.response?.data?.message ?? 'Could not join the project.')
         } finally {
             setLoading(false)
         }
@@ -87,15 +87,14 @@ export default function ProjectsHubPage() {
     return (
         <div className="page-wrap tasko-hub">
             <section className="tasko-hub__hero">
-                <div className="tasko-hub__eyebrow">TASKO · ЦЕНТР ПРОЄКТІВ</div>
+                <div className="tasko-hub__eyebrow">TASKO PROJECT CENTER</div>
 
                 <h1 className="tasko-hub__title">
-                    Привіт, {firstName} 🌸
+                    Welcome, {firstName}
                 </h1>
 
                 <p className="tasko-hub__text">
-                    Tasko допомагає організовувати навчальні проєкти, команди,
-                    завдання та дедлайни — легко й у одному місці.
+                    Create learning projects, join active classes, manage tasks, and keep feedback in one organized place.
                 </p>
             </section>
 
@@ -108,14 +107,16 @@ export default function ProjectsHubPage() {
                     className="tasko-action-card tasko-action-card--create"
                     onClick={openCreateModal}
                 >
-                    <span className="tasko-action-card__icon">✏️</span>
+                    <span className="tasko-action-card__icon tasko-action-card__icon--create" aria-hidden="true" />
 
                     <span className="tasko-action-card__content">
-                        <span className="tasko-action-card__title">Створити проєкт</span>
-                        <span className="tasko-action-card__desc"></span>
+                        <span className="tasko-action-card__title">Create project</span>
+                        <span className="tasko-action-card__desc">
+                            Start a workspace for tasks, submissions, and grading.
+                        </span>
                     </span>
 
-                    <span className="tasko-action-card__arrow">→</span>
+                    <span className="tasko-action-card__arrow">-&gt;</span>
                 </button>
 
                 <button
@@ -123,40 +124,50 @@ export default function ProjectsHubPage() {
                     className="tasko-action-card tasko-action-card--join"
                     onClick={openJoinModal}
                 >
-                    <span className="tasko-action-card__icon">🔑</span>
-
-                    <span className="tasko-action-card__content">
-                        <span className="tasko-action-card__title">Приєднатись до проєкту</span>
-                        <span className="tasko-action-card__desc"></span>
+                    <span className="tasko-action-card__icon tasko-action-card__icon--join" aria-hidden="true">
+                        <svg className="tasko-action-card__svg" viewBox="0 0 64 64" focusable="false">
+                            <circle cx="21" cy="32" r="11" />
+                            <circle cx="21" cy="32" r="4" />
+                            <path d="M32 32H55" />
+                            <path d="M46 32V42" />
+                            <path d="M55 32V39" />
+                        </svg>
                     </span>
 
-                    <span className="tasko-action-card__arrow">→</span>
+                    <span className="tasko-action-card__content">
+                        <span className="tasko-action-card__title">Join project</span>
+                        <span className="tasko-action-card__desc">
+                            Enter an invite code from your teacher or project owner.
+                        </span>
+                    </span>
+
+                    <span className="tasko-action-card__arrow">-&gt;</span>
                 </button>
 
                 <Link to="/projects/mine" className="tasko-action-card tasko-action-card--mine">
-                    <span className="tasko-action-card__icon">📁</span>
+                    <span className="tasko-action-card__icon tasko-action-card__icon--mine" aria-hidden="true" />
 
                     <span className="tasko-action-card__content">
-                        <span className="tasko-action-card__title">Мої проєкти</span>
+                        <span className="tasko-action-card__title">My projects</span>
                         <span className="tasko-action-card__desc">
-                            Переглядай свої проєкти та керуй ними
+                            Review the projects you created and manage their tasks.
                         </span>
                     </span>
 
-                    <span className="tasko-action-card__arrow">→</span>
+                    <span className="tasko-action-card__arrow">-&gt;</span>
                 </Link>
 
                 <Link to="/projects/enrolled" className="tasko-action-card tasko-action-card--enrolled">
-                    <span className="tasko-action-card__icon">🎒</span>
+                    <span className="tasko-action-card__icon tasko-action-card__icon--enrolled" aria-hidden="true" />
 
                     <span className="tasko-action-card__content">
-                        <span className="tasko-action-card__title">Беру участь</span>
+                        <span className="tasko-action-card__title">Participating projects</span>
                         <span className="tasko-action-card__desc">
-                            Переглядай проєкти, до яких ти приєдналась
+                            Open projects you joined and continue your assigned work.
                         </span>
                     </span>
 
-                    <span className="tasko-action-card__arrow">→</span>
+                    <span className="tasko-action-card__arrow">-&gt;</span>
                 </Link>
             </section>
 
@@ -165,43 +176,43 @@ export default function ProjectsHubPage() {
                     <section className="tasko-modal" onMouseDown={(event) => event.stopPropagation()}>
                         <div className="tasko-modal__header">
                             <div>
-                                <div className="tasko-modal__eyebrow">Новий проєкт</div>
-                                <h2 className="tasko-modal__title">Створити проєкт</h2>
+                                <div className="tasko-modal__eyebrow">New project</div>
+                                <h2 className="tasko-modal__title">Create project</h2>
                             </div>
 
                             <button
                                 type="button"
                                 className="tasko-modal__close"
                                 onClick={closeModal}
-                                aria-label="Закрити"
+                                aria-label="Close"
                             >
-                                ✕
+                                x
                             </button>
                         </div>
 
                         <div className="tasko-modal__body">
                             <label className="tasko-field">
-                                <span>Назва проєкту</span>
+                                <span>Project name</span>
                                 <input
                                     className="inp"
                                     value={name}
                                     onChange={(event) => setName(event.target.value)}
-                                    placeholder="Наприклад: Командний вебпроєкт"
+                                    placeholder="For example: Web Design Lab"
                                 />
                             </label>
 
                             <label className="tasko-field">
-                                <span>Опис</span>
+                                <span>Description</span>
                                 <textarea
                                     className="inp"
                                     value={description}
                                     onChange={(event) => setDescription(event.target.value)}
-                                    placeholder="Коротко опиши, над чим працюватиме команда"
+                                    placeholder="Briefly describe what this project is about"
                                 />
                             </label>
 
                             <label className="tasko-field">
-                                <span>Дедлайн</span>
+                                <span>Deadline</span>
                                 <input
                                     className="inp"
                                     type="date"
@@ -218,7 +229,7 @@ export default function ProjectsHubPage() {
                                 onClick={closeModal}
                                 disabled={loading}
                             >
-                                Скасувати
+                                Cancel
                             </button>
 
                             <button
@@ -227,7 +238,7 @@ export default function ProjectsHubPage() {
                                 onClick={create}
                                 disabled={loading || !name.trim()}
                             >
-                                {loading ? 'Створення...' : 'Створити'}
+                                {loading ? 'Creating...' : 'Create project'}
                             </button>
                         </div>
                     </section>
@@ -239,35 +250,35 @@ export default function ProjectsHubPage() {
                     <section className="tasko-modal tasko-modal--small" onMouseDown={(event) => event.stopPropagation()}>
                         <div className="tasko-modal__header">
                             <div>
-                                <div className="tasko-modal__eyebrow">Код доступу</div>
-                                <h2 className="tasko-modal__title">Приєднатись до проєкту</h2>
+                                <div className="tasko-modal__eyebrow">Invite code</div>
+                                <h2 className="tasko-modal__title">Join project</h2>
                             </div>
 
                             <button
                                 type="button"
                                 className="tasko-modal__close"
                                 onClick={closeModal}
-                                aria-label="Закрити"
+                                aria-label="Close"
                             >
-                                ✕
+                                x
                             </button>
                         </div>
 
                         <div className="tasko-modal__body">
                             <label className="tasko-field">
-                                <span>Код проєкту</span>
+                                <span>Project code</span>
                                 <input
                                     className="inp"
                                     value={joinCode}
                                     onChange={(event) => setJoinCode(event.target.value)}
-                                    placeholder="Введи код від власника проєкту"
+                                    placeholder="Enter the project code"
                                 />
                             </label>
 
                             <div className="hint-box">
-                                <div className="hint-title">Підказка</div>
+                                <div className="hint-title">Hint</div>
                                 <div className="hint-text">
-                                    Код можна отримати у викладача або власника проєкту.
+                                    Ask your teacher or project owner for the invite code.
                                 </div>
                             </div>
                         </div>
@@ -279,7 +290,7 @@ export default function ProjectsHubPage() {
                                 onClick={closeModal}
                                 disabled={loading}
                             >
-                                Скасувати
+                                Cancel
                             </button>
 
                             <button
@@ -288,7 +299,7 @@ export default function ProjectsHubPage() {
                                 onClick={join}
                                 disabled={loading || !joinCode.trim()}
                             >
-                                {loading ? 'Приєднання...' : 'Приєднатись'}
+                                {loading ? 'Joining...' : 'Join project'}
                             </button>
                         </div>
                     </section>

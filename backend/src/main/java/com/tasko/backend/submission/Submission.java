@@ -63,4 +63,12 @@ public class Submission {
 
     @Column(name = "ai_evaluated_at")
     private Instant aiEvaluatedAt;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ai_status", nullable = false, length = 32)
+    private AiEvaluationStatus aiStatus = AiEvaluationStatus.PENDING;
+
+    @Column(name = "ai_error_message")
+    private String aiErrorMessage;
 }

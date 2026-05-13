@@ -29,8 +29,8 @@ export default function AppShell() {
     const rafRef = useRef<number | null>(null)
 
     useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setOpen(false)
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setOpen(false)
         }
 
         window.addEventListener('keydown', onKey)
@@ -57,7 +57,7 @@ export default function AppShell() {
         window.addEventListener('resize', resize)
 
         const spawnFlowers = (x: number, y: number, count: number) => {
-            for (let i = 0; i < count; i += 1) {
+            for (let index = 0; index < count; index += 1) {
                 petalsRef.current.push({
                     x,
                     y,
@@ -73,40 +73,40 @@ export default function AppShell() {
             }
         }
 
-        const onPointer = (e: MouseEvent) => {
-            const target = e.target as HTMLElement | null
+        const onPointer = (event: MouseEvent) => {
+            const target = event.target as HTMLElement | null
             if (!target) return
             if (target.closest('input,textarea,button,a,[role="button"],.drawer')) return
-            spawnFlowers(e.clientX, e.clientY, 14)
+            spawnFlowers(event.clientX, event.clientY, 14)
         }
 
         window.addEventListener('click', onPointer)
 
-        const drawPetal = (p: Petal) => {
+        const drawPetal = (petal: Petal) => {
             ctx.save()
-            ctx.translate(p.x, p.y)
-            ctx.rotate(p.rot)
-            ctx.globalAlpha = p.life
+            ctx.translate(petal.x, petal.y)
+            ctx.rotate(petal.rot)
+            ctx.globalAlpha = petal.life
 
-            if (p.kind === 'flower') {
-                for (let i = 0; i < 5; i += 1) {
+            if (petal.kind === 'flower') {
+                for (let index = 0; index < 5; index += 1) {
                     ctx.save()
-                    ctx.rotate((Math.PI * 2 * i) / 5)
-                    ctx.fillStyle = p.color
+                    ctx.rotate((Math.PI * 2 * index) / 5)
+                    ctx.fillStyle = petal.color
                     ctx.beginPath()
-                    ctx.ellipse(0, -p.size * 0.9, p.size * 0.55, p.size * 0.9, 0, 0, Math.PI * 2)
+                    ctx.ellipse(0, -petal.size * 0.9, petal.size * 0.55, petal.size * 0.9, 0, 0, Math.PI * 2)
                     ctx.fill()
                     ctx.restore()
                 }
 
                 ctx.fillStyle = '#f8e7a1'
                 ctx.beginPath()
-                ctx.arc(0, 0, p.size * 0.42, 0, Math.PI * 2)
+                ctx.arc(0, 0, petal.size * 0.42, 0, Math.PI * 2)
                 ctx.fill()
             } else {
-                ctx.fillStyle = p.color
+                ctx.fillStyle = petal.color
                 ctx.beginPath()
-                ctx.ellipse(0, 0, p.size * 0.65, p.size, 0, 0, Math.PI * 2)
+                ctx.ellipse(0, 0, petal.size * 0.65, petal.size, 0, 0, Math.PI * 2)
                 ctx.fill()
             }
 
@@ -116,15 +116,15 @@ export default function AppShell() {
         const render = () => {
             ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
 
-            petalsRef.current = petalsRef.current.filter((p) => p.life > 0)
+            petalsRef.current = petalsRef.current.filter((petal) => petal.life > 0)
 
-            for (const p of petalsRef.current) {
-                drawPetal(p)
-                p.x += p.vx
-                p.y += p.vy
-                p.vy += 0.045
-                p.rot += p.vrot
-                p.life -= 0.018
+            for (const petal of petalsRef.current) {
+                drawPetal(petal)
+                petal.x += petal.vx
+                petal.y += petal.vy
+                petal.vy += 0.045
+                petal.rot += petal.vrot
+                petal.life -= 0.018
             }
 
             rafRef.current = window.requestAnimationFrame(render)
@@ -151,8 +151,13 @@ export default function AppShell() {
 
             <header className="topbar">
                 <div className="topbar__left">
-                    <button className="iconbtn" onClick={() => setOpen(true)} aria-label="Open menu">
-                        ☰
+                    <button
+                        className="iconbtn iconbtn--text"
+                        onClick={() => setOpen((current) => !current)}
+                        aria-label={open ? 'Close menu' : 'Open menu'}
+                        aria-expanded={open}
+                    >
+                        <span className="topbar-menu-icon" aria-hidden="true" />
                     </button>
 
                     <div className="brand">
@@ -179,18 +184,18 @@ export default function AppShell() {
                         type="button"
                         className="user__profile-link"
                         onClick={goToProfile}
-                        aria-label="Редагувати профіль"
+                        aria-label="Edit profile"
                     >
                         {auth.me?.avatarUrl ? (
                             <img className="user__avatar" src={auth.me.avatarUrl} alt="avatar" />
                         ) : (
-                            <span className="user__avatar user__avatar--fallback">🙂</span>
+                            <span className="user__avatar user__avatar--fallback">U</span>
                         )}
 
                         <span className="user__meta">
-            <span className="user__name">{auth.me?.name ?? 'User'}</span>
-            <span className="user__email">{auth.me?.email ?? ''}</span>
-        </span>
+                            <span className="user__name">{auth.me?.name ?? 'User'}</span>
+                            <span className="user__email">{auth.me?.email ?? ''}</span>
+                        </span>
                     </button>
                 </div>
             </header>
@@ -199,9 +204,9 @@ export default function AppShell() {
 
             <aside className="drawer" aria-label="Menu">
                 <div className="drawer__head">
-                    <div className="drawer__title">MENU</div>
-                    <button className="iconbtn" onClick={() => setOpen(false)} aria-label="Close menu">
-                        ✕
+                    <div className="drawer__title">Menu</div>
+                    <button className="iconbtn iconbtn--text" onClick={() => setOpen(false)} aria-label="Close menu">
+                        Close
                     </button>
                 </div>
 
@@ -210,7 +215,8 @@ export default function AppShell() {
                     className={({ isActive }) => (isActive ? 'navlink navlink--active' : 'navlink')}
                     onClick={() => setOpen(false)}
                 >
-                    🏠 Projects
+                    <span className="navlink__icon navlink__icon--projects" aria-hidden="true" />
+                    <span>Projects</span>
                 </NavLink>
 
                 <NavLink
@@ -218,7 +224,8 @@ export default function AppShell() {
                     className={({ isActive }) => (isActive ? 'navlink navlink--active' : 'navlink')}
                     onClick={() => setOpen(false)}
                 >
-                    📁 My Projects
+                    <span className="navlink__icon navlink__icon--mine" aria-hidden="true" />
+                    <span>My Projects</span>
                 </NavLink>
 
                 <NavLink
@@ -226,26 +233,36 @@ export default function AppShell() {
                     className={({ isActive }) => (isActive ? 'navlink navlink--active' : 'navlink')}
                     onClick={() => setOpen(false)}
                 >
-                    🎒 Participating Projects
+                    <span className="navlink__icon navlink__icon--enrolled" aria-hidden="true" />
+                    <span>Participating Projects</span>
                 </NavLink>
-
 
                 <NavLink
                     to="/profile"
                     className={({ isActive }) => (isActive ? 'navlink navlink--active' : 'navlink')}
                     onClick={() => setOpen(false)}
                 >
-                    👤 Profile
+                    <span className="navlink__icon navlink__icon--profile" aria-hidden="true" />
+                    <span>Profile</span>
                 </NavLink>
 
-                <button className="navlink" onClick={() => auth.logout()}>
-                    🚪 Logout
+                <button className="navlink navlink--logout" onClick={() => auth.logout()}>
+                    <span className="navlink__icon navlink__icon--logout" aria-hidden="true" />
+                    <span>Logout</span>
                 </button>
             </aside>
 
             <main className="content">
                 <Outlet />
             </main>
+
+            <footer className="app-footer">
+                <div className="app-footer__inner">
+                    <span className="app-footer__brand">Tasko</span>
+                    <span>Learning projects, submissions, and feedback in one place.</span>
+                    <span className="app-footer__meta">Built for focused classroom work.</span>
+                </div>
+            </footer>
         </div>
     )
 }

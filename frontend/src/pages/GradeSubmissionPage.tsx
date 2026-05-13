@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import type { Submission, Task } from '../api/types'
 import { submissionsApi } from '../api/submissions.api'
 import { tasksApi } from '../api/tasks.api'
@@ -19,6 +19,25 @@ function formatTaskDeadline(deadline?: string | null) {
     })
 }
 
+function getAiStatus(submission: Submission) {
+    if (submission.aiStatus) return submission.aiStatus
+    return submission.aiEvaluatedAt ? 'DONE' : 'PENDING'
+}
+
+function getAiStatusLabel(submission: Submission) {
+    switch (getAiStatus(submission)) {
+        case 'DONE':
+            return 'Done'
+        case 'FAILED':
+            return 'Failed'
+        case 'DISABLED':
+            return 'Disabled'
+        case 'PENDING':
+        default:
+            return 'Pending'
+    }
+}
+
 export default function GradeSubmissionPage() {
     const { projectId, taskId, submissionId } = useParams()
 
@@ -27,7 +46,6 @@ export default function GradeSubmissionPage() {
     const sid = Number(submissionId)
 
     const mode = ((useLocation().state as LocationState | null)?.mode ?? 'teacher') as 'teacher' | 'student'
-    const navigate = useNavigate()
 
     const [task, setTask] = useState<Task | null>(null)
     const [submission, setSubmission] = useState<Submission | null>(null)
@@ -38,10 +56,24 @@ export default function GradeSubmissionPage() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [success, setSuccess] = useState<string | null>(null)
+
+    const teacherScoreError =
+        !Number.isFinite(teacherScore)
+            ? 'Score must be a number.'
+            : !Number.isInteger(teacherScore)
+                ? 'Score must be a whole number.'
+                : teacherScore < 0
+                    ? 'Score must be at least 0.'
+                    : task && teacherScore > task.maxScore
+                        ? `Score must be <= ${task.maxScore}.`
+                        : null
+    const canSaveGrade = task != null && !saving && !loading && teacherScoreError == null
 
     async function load() {
         setLoading(true)
         setError(null)
+        setSuccess(null)
 
         try {
             const t = await tasksApi.get(pid, tid)
@@ -61,9 +93,15 @@ export default function GradeSubmissionPage() {
 
     async function onGrade() {
         if (!task) return
+        if (teacherScoreError) {
+            setSuccess(null)
+            setError(teacherScoreError)
+            return
+        }
 
         setSaving(true)
         setError(null)
+        setSuccess(null)
 
         try {
             const updated = await submissionsApi.grade(pid, tid, sid, {
@@ -72,8 +110,7 @@ export default function GradeSubmissionPage() {
             })
 
             setSubmission(updated)
-
-            navigate('/projects/mine', { replace: true })
+            setSuccess('Grade saved.')
         } catch (e: any) {
             setError(e?.message ?? 'Failed to grade')
         } finally {
@@ -84,11 +121,13 @@ export default function GradeSubmissionPage() {
     async function reEvaluateAi() {
         setSaving(true)
         setError(null)
+        setSuccess(null)
 
         try {
             const updated = await submissionsApi.reEvaluateAi(pid, tid, sid)
             setSubmission(updated)
             await load()
+            setSuccess('AI evaluation queued.')
         } catch (e: any) {
             setError(e?.message ?? 'Failed to re-evaluate AI')
         } finally {
@@ -121,6 +160,12 @@ export default function GradeSubmissionPage() {
             {error && (
                 <div className="small" style={{ color: 'red', marginTop: 12 }}>
                     {error}
+                </div>
+            )}
+
+            {success && (
+                <div className="small" style={{ color: 'green', marginTop: 12 }}>
+                    {success}
                 </div>
             )}
 
@@ -186,9 +231,19 @@ export default function GradeSubmissionPage() {
                             className="input"
                             min={0}
                             max={task?.maxScore ?? 100}
+                            step={1}
                             value={teacherScore}
-                            onChange={(e) => setTeacherScore(Number(e.target.value))}
+                            onChange={(e) => {
+                                const value = e.currentTarget.valueAsNumber
+                                setTeacherScore(Number.isNaN(value) ? 0 : value)
+                            }}
                         />
+
+                        {teacherScoreError ? (
+                            <div className="small" style={{ color: 'red' }}>
+                                {teacherScoreError}
+                            </div>
+                        ) : null}
 
                         <textarea
                             className="input"
@@ -197,7 +252,7 @@ export default function GradeSubmissionPage() {
                             onChange={(e) => setTeacherComment(e.target.value)}
                         />
 
-                        <button className="btn btn--primary" onClick={onGrade} disabled={saving}>
+                        <button className="btn btn--primary" onClick={onGrade} disabled={!canSaveGrade}>
                             {saving ? 'Saving…' : 'Save grade'}
                         </button>
                     </div>
@@ -205,13 +260,17 @@ export default function GradeSubmissionPage() {
                     <div className="card card--soft">
                         <h2>🤖 AI Evaluation</h2>
 
-                        {!submission.aiEvaluatedAt && (
-                            <div className="small">AI is evaluating...</div>
-                        )}
+                        <div className="small">
+                            Status: {getAiStatusLabel(submission)}
+                        </div>
 
-                        {submission.aiEvaluatedAt && (
+                        {getAiStatus(submission) === 'PENDING' ? (
+                            <div className="small" style={{ marginTop: 8 }}>AI is evaluating...</div>
+                        ) : null}
+
+                        {getAiStatus(submission) === 'DONE' && (
                             <>
-                                <div>
+                                <div style={{ marginTop: 8 }}>
                                     AI suggested score: <strong>{submission.aiScore ?? 0}</strong>
                                 </div>
 
@@ -223,8 +282,18 @@ export default function GradeSubmissionPage() {
                             </>
                         )}
 
+                        {(getAiStatus(submission) === 'FAILED' || getAiStatus(submission) === 'DISABLED') ? (
+                            <div className="small" style={{ whiteSpace: 'pre-wrap', marginTop: 8, color: 'red' }}>
+                                {submission.aiErrorMessage ?? 'AI evaluation is not available.'}
+                            </div>
+                        ) : null}
+
                         <div style={{ marginTop: 12 }}>
-                            <button className="btn" onClick={reEvaluateAi} disabled={saving}>
+                            <button
+                                className="btn"
+                                onClick={reEvaluateAi}
+                                disabled={saving || getAiStatus(submission) === 'PENDING'}
+                            >
                                 🔁 Re-evaluate AI
                             </button>
                         </div>

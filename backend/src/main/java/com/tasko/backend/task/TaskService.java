@@ -40,6 +40,7 @@ public class TaskService {
                 .description(normalizeNullable(req.description()))
                 .deadline(req.deadline())
                 .maxScore(req.maxScore())
+                .allowResubmissionAfterGrade(resolveAllowResubmissionAfterGrade(req.allowResubmissionAfterGrade()))
                 .status(TaskStatus.TODO)
                 .build());
 
@@ -101,6 +102,9 @@ public class TaskService {
         if (req.description() != null) task.setDescription(normalizeNullable(req.description()));
         if (req.deadline() != null) task.setDeadline(req.deadline());
         if (req.maxScore() != null) task.setMaxScore(req.maxScore());
+        if (req.allowResubmissionAfterGrade() != null) {
+            task.setAllowResubmissionAfterGrade(req.allowResubmissionAfterGrade());
+        }
 
         return toResponse(taskRepository.save(task));
     }
@@ -169,6 +173,10 @@ public class TaskService {
         return v.isBlank() ? null : v;
     }
 
+    private boolean resolveAllowResubmissionAfterGrade(Boolean value) {
+        return value == null || value;
+    }
+
     private TaskShortResponse toShortResponse(Task t) {
         return new TaskShortResponse(
                 t.getId(),
@@ -189,6 +197,7 @@ public class TaskService {
                 t.getDescription(),
                 t.getDeadline(),
                 t.getMaxScore(),
+                t.isAllowResubmissionAfterGrade(),
                 t.getStatus(),
                 t.getCreatedAt(),
                 t.getUpdatedAt()

@@ -3,6 +3,7 @@ package com.tasko.backend.ai;
 import com.tasko.backend.exception.NotFoundException;
 import com.tasko.backend.project.Project;
 import com.tasko.backend.project.ProjectRepository;
+import com.tasko.backend.submission.AiEvaluationStatus;
 import com.tasko.backend.submission.Submission;
 import com.tasko.backend.submission.SubmissionRepository;
 import com.tasko.backend.task.Task;
@@ -28,24 +29,29 @@ public class AiEvaluationService {
     private final ProjectRepository projectRepository;
 
     @Async
+    @Transactional
     public void evaluateAsync(Long submissionId) {
-        if (!props.isEnabled()) return;
+        if (!canEvaluate()) {
+            markDisabled(submissionId);
+            return;
+        }
+
         try {
             evaluateAndPersist(submissionId);
         } catch (Exception e) {
+            markFailed(submissionId, e);
             log.warn("AI evaluation failed for submission {}: {}", submissionId, e.getMessage());
         }
     }
 
     @Transactional
     public Submission evaluateNow(Long submissionId) {
-        if (!props.isEnabled()) {
-            throw new AiProviderException("AI is disabled (tasko.ai.enabled=false)");
+        if (!canEvaluate()) {
+            return markDisabled(submissionId);
         }
         return evaluateAndPersist(submissionId);
     }
 
-    @Transactional
     protected Submission evaluateAndPersist(Long submissionId) {
         Submission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new NotFoundException("Submission not found"));
@@ -65,8 +71,81 @@ public class AiEvaluationService {
         submission.setAiScore(bounded);
         submission.setAiComment(clean(result.aiComment()));
         submission.setAiEvaluatedAt(Instant.now());
+        submission.setAiStatus(AiEvaluationStatus.DONE);
+        submission.setAiErrorMessage(null);
 
         return submissionRepository.save(submission);
+    }
+
+    public void prepareForEvaluation(Submission submission) {
+        submission.setAiScore(null);
+        submission.setAiComment(null);
+        submission.setAiEvaluatedAt(null);
+
+        if (!props.isEnabled()) {
+            submission.setAiStatus(AiEvaluationStatus.DISABLED);
+            submission.setAiErrorMessage("AI is disabled");
+            return;
+        }
+
+        if (!hasApiKey()) {
+            submission.setAiStatus(AiEvaluationStatus.DISABLED);
+            submission.setAiErrorMessage("OpenAI API key is not configured");
+            return;
+        }
+
+        submission.setAiStatus(AiEvaluationStatus.PENDING);
+        submission.setAiErrorMessage(null);
+    }
+
+    public boolean shouldEvaluate(Submission submission) {
+        return submission.getAiStatus() == AiEvaluationStatus.PENDING;
+    }
+
+    private boolean canEvaluate() {
+        return props.isEnabled() && hasApiKey();
+    }
+
+    private boolean hasApiKey() {
+        return props.getOpenaiApiKey() != null && !props.getOpenaiApiKey().isBlank();
+    }
+
+    private Submission markDisabled(Long submissionId) {
+        Submission submission = submissionRepository.findById(submissionId)
+                .orElseThrow(() -> new NotFoundException("Submission not found"));
+
+        submission.setAiScore(null);
+        submission.setAiComment(null);
+        submission.setAiEvaluatedAt(null);
+        submission.setAiStatus(AiEvaluationStatus.DISABLED);
+        submission.setAiErrorMessage(props.isEnabled()
+                ? "OpenAI API key is not configured"
+                : "AI is disabled");
+
+        return submissionRepository.save(submission);
+    }
+
+    private void markFailed(Long submissionId, Exception error) {
+        Submission submission = submissionRepository.findById(submissionId).orElse(null);
+        if (submission == null) return;
+
+        submission.setAiScore(null);
+        submission.setAiComment(null);
+        submission.setAiEvaluatedAt(null);
+        submission.setAiStatus(AiEvaluationStatus.FAILED);
+        submission.setAiErrorMessage(shortError(error));
+
+        submissionRepository.save(submission);
+    }
+
+    private String shortError(Exception error) {
+        String message = error.getMessage();
+        if (message == null || message.isBlank()) {
+            message = error.getClass().getSimpleName();
+        }
+
+        message = message.trim();
+        return message.length() > 1000 ? message.substring(0, 1000) : message;
     }
 
     private AiEvaluationPrompt buildPrompt(Project project, Task task, Submission submission) {

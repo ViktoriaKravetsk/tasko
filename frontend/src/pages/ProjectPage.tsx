@@ -26,6 +26,7 @@ export default function ProjectPage() {
     const [tDesc, setTDesc] = useState('')
     const [tDeadline, setTDeadline] = useState('')
     const [tMaxScore, setTMaxScore] = useState<number>(10)
+    const [tAllowResubmissionAfterGrade, setTAllowResubmissionAfterGrade] = useState(true)
     const [copied, setCopied] = useState(false)
 
     const [taskSearch, setTaskSearch] = useState('')
@@ -124,12 +125,14 @@ export default function ProjectPage() {
                 description: tDesc.trim() || undefined,
                 deadline: tDeadline || undefined,
                 maxScore: tMaxScore,
+                allowResubmissionAfterGrade: tAllowResubmissionAfterGrade,
             })
 
             setTTitle('')
             setTDesc('')
             setTDeadline('')
             setTMaxScore(10)
+            setTAllowResubmissionAfterGrade(true)
 
             await load(debouncedTaskSearch, deadlineFilter)
             setTab('tasks')
@@ -476,6 +479,24 @@ export default function ProjectPage() {
                                         placeholder="Max score"
                                     />
                                 </div>
+
+                                <label
+                                    className="tasko-field"
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 10,
+                                        marginTop: 4,
+                                    }}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={tAllowResubmissionAfterGrade}
+                                        onChange={(e) => setTAllowResubmissionAfterGrade(e.target.checked)}
+                                    />
+                                    <span>Allow resubmission after grading</span>
+                                </label>
 
                                 <button
                                     className="btn-primary"

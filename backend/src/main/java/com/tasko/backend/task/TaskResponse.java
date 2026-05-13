@@ -10,6 +10,7 @@ public record TaskResponse(
         String description,
         LocalDate deadline,
         Integer maxScore,
+        boolean allowResubmissionAfterGrade,
         TaskStatus status,
         Instant createdAt,
         Instant updatedAt

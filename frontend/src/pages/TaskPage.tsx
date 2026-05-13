@@ -29,6 +29,9 @@ export default function TaskPage() {
 
     const submissionStatus =
         mySubmission == null ? 'NOT_SUBMITTED' : mySubmission.teacherScore == null ? 'SUBMITTED' : 'GRADED'
+    const resubmissionAfterGradeAllowed = task?.allowResubmissionAfterGrade !== false
+    const isResubmissionLocked =
+        !isTeacher && mySubmission?.teacherScore != null && !resubmissionAfterGradeAllowed
 
     async function load() {
         if (!Number.isFinite(pid) || !Number.isFinite(tid)) {
@@ -89,6 +92,28 @@ export default function TaskPage() {
             return
         }
 
+        if (
+            mySubmission &&
+            isSameSubmissionContent(
+                mySubmission,
+                normalizedTextAnswer || null,
+                normalizedFileLink || null
+            )
+        ) {
+            setError(null)
+            setSuccess('No changes to update.')
+            return
+        }
+
+        if (isResubmissionLocked) {
+            setSuccess(null)
+            setError('This submission has already been graded. Resubmission is disabled for this task.')
+            return
+        }
+
+        const hadSubmission = mySubmission != null
+        const wasGraded = mySubmission?.teacherScore != null
+
         setSaving(true)
         setError(null)
         setSuccess(null)
@@ -102,7 +127,13 @@ export default function TaskPage() {
             setMySubmission(savedSubmission)
             setTextAnswer(savedSubmission.textAnswer ?? normalizedTextAnswer)
             setFileLink(savedSubmission.fileLink ?? normalizedFileLink)
-            setSuccess(mySubmission ? 'Submission updated.' : 'Submission sent.')
+            setSuccess(
+                !hadSubmission
+                    ? 'Submission sent.'
+                    : wasGraded
+                        ? 'Submission updated and sent for review again.'
+                        : 'Submission updated.'
+            )
         } catch (e: any) {
             setError(e?.message ?? e?.response?.data?.message ?? 'Failed to submit answer')
         } finally {
@@ -185,6 +216,10 @@ export default function TaskPage() {
                                     <span className="meta-pill">
                                         Max: {task.maxScore}
                                     </span>
+
+                                    <span className="meta-pill">
+                                        Resubmission: {resubmissionAfterGradeAllowed ? 'allowed' : 'locked after grading'}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -215,6 +250,16 @@ export default function TaskPage() {
                                     </span>
                                 </div>
 
+                                {isResubmissionLocked ? (
+                                    <div className="alert alert--error" style={{ marginBottom: 14 }}>
+                                        This submission has been graded. Resubmission is disabled for this task.
+                                    </div>
+                                ) : mySubmission?.teacherScore != null ? (
+                                    <div className="alert" style={{ marginBottom: 14 }}>
+                                        Updating this submission will send it for review again.
+                                    </div>
+                                ) : null}
+
                                 <label className="tasko-field">
                                     <span>Text answer</span>
                                     <textarea
@@ -222,7 +267,7 @@ export default function TaskPage() {
                                         value={textAnswer}
                                         onChange={(e) => setTextAnswer(e.target.value)}
                                         placeholder="Write your answer here..."
-                                        disabled={loading || saving}
+                                        disabled={loading || saving || isResubmissionLocked}
                                     />
                                 </label>
 
@@ -233,7 +278,7 @@ export default function TaskPage() {
                                         value={fileLink}
                                         onChange={(e) => setFileLink(e.target.value)}
                                         placeholder="Paste a file link here..."
-                                        disabled={loading || saving}
+                                        disabled={loading || saving || isResubmissionLocked}
                                     />
                                 </label>
 
@@ -242,7 +287,7 @@ export default function TaskPage() {
                                         className="btn btn--primary"
                                         type="button"
                                         onClick={submitAnswer}
-                                        disabled={loading || saving || (!textAnswer.trim() && !fileLink.trim())}
+                                        disabled={loading || saving || isResubmissionLocked || (!textAnswer.trim() && !fileLink.trim())}
                                     >
                                         {saving
                                             ? 'Saving…'
@@ -258,8 +303,12 @@ export default function TaskPage() {
                                     <div>Teacher score: {mySubmission?.teacherScore ?? '—'}</div>
                                     <div>Teacher comment: {mySubmission?.teacherComment ?? '—'}</div>
 
+                                    <div>AI status: {getAiStatusLabel(mySubmission)}</div>
                                     <div>AI score: {getAiScore(mySubmission)}</div>
                                     <div>AI comment: {getAiComment(mySubmission)}</div>
+                                    {mySubmission?.aiErrorMessage ? (
+                                        <div>AI note: {mySubmission.aiErrorMessage}</div>
+                                    ) : null}
                                 </div>
                             </div>
                         </section>
@@ -288,8 +337,23 @@ function formatDateTime(value?: string | null) {
     }).format(date)
 }
 
+function isSameSubmissionContent(
+    submission: Submission,
+    textAnswer: string | null,
+    fileLink: string | null
+) {
+    return normalizeOptional(submission.textAnswer) === textAnswer
+        && normalizeOptional(submission.fileLink) === fileLink
+}
+
+function normalizeOptional(value?: string | null) {
+    const normalized = value?.trim() ?? ''
+    return normalized ? normalized : null
+}
+
 function getAiScore(submission: Submission | null) {
     if (!submission) return '—'
+    if (getAiStatus(submission) !== 'DONE') return '—'
 
     const s = submission as any
 
@@ -310,6 +374,7 @@ function getAiScore(submission: Submission | null) {
 
 function getAiComment(submission: Submission | null) {
     if (!submission) return '—'
+    if (getAiStatus(submission) !== 'DONE') return '—'
 
     const s = submission as any
 
@@ -326,4 +391,24 @@ function getAiComment(submission: Submission | null) {
         s.ai_teacher_comment ??
         '—'
     )
+}
+
+function getAiStatus(submission: Submission | null) {
+    if (!submission) return 'PENDING'
+    if (submission.aiStatus) return submission.aiStatus
+    return submission.aiEvaluatedAt ? 'DONE' : 'PENDING'
+}
+
+function getAiStatusLabel(submission: Submission | null) {
+    switch (getAiStatus(submission)) {
+        case 'DONE':
+            return 'Done'
+        case 'FAILED':
+            return 'Failed'
+        case 'DISABLED':
+            return 'Disabled'
+        case 'PENDING':
+        default:
+            return 'Pending'
+    }
 }
