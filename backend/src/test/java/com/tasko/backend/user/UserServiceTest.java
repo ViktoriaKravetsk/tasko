@@ -1,14 +1,13 @@
 package com.tasko.backend.user;
 
+import com.tasko.backend.exception.UnauthenticatedException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -38,11 +37,11 @@ class UserServiceTest {
 
     @Test
     void getOrCreate_throws401_whenPrincipalNull() {
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        UnauthenticatedException ex = assertThrows(
+                UnauthenticatedException.class,
                 () -> userService.getOrCreateFromGoogle(null)
         );
-        assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
+        assertEquals("Unauthorized", ex.getMessage());
     }
 
     @Test

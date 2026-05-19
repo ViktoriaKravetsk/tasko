@@ -1,17 +1,18 @@
 server:
-  port: 8083
+  port: ${PORT:8083}
+  forward-headers-strategy: framework
   servlet:
     session:
       cookie:
-        same-site: LAX
-        secure: false
+        same-site: ${SESSION_COOKIE_SAME_SITE:LAX}
+        secure: ${SESSION_COOKIE_SECURE:false}
         http-only: true
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5434/tasko_db
-    username: tasko
-    password: tasko
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5434/tasko_db}
+    username: ${SPRING_DATASOURCE_USERNAME:tasko}
+    password: ${SPRING_DATASOURCE_PASSWORD:tasko}
 
   jpa:
     hibernate:
@@ -43,7 +44,7 @@ spring:
 
 logging:
   level:
-    org.springframework.security: DEBUG
+    org.springframework.security: ${SPRING_SECURITY_LOG_LEVEL:WARN}
 
 management:
   endpoints:
@@ -52,6 +53,10 @@ management:
         include: health, info
 
 tasko:
+  web:
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+    allowed-origins: ${TASKO_ALLOWED_ORIGINS:http://localhost:5173}
+
   ai:
     enabled: true
     provider: openai

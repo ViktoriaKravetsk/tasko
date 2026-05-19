@@ -3,6 +3,8 @@ import { authApi } from '../api/auth.api'
 import type { Me } from '../api/types'
 import { AuthContext, type AuthState } from './auth-context'
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [isReady, setIsReady] = useState(false)
     const [me, setMe] = useState<Me | null>(null)
@@ -23,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, [refresh])
 
     const loginWithGoogle = useCallback(() => {
-        window.location.href = 'http://localhost:8083/oauth2/authorization/google'
+        window.location.href = `${API_BASE}/oauth2/authorization/google`
     }, [])
 
     const logout = useCallback(async () => {

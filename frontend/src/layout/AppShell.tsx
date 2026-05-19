@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { MouseEvent } from 'react'
+import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useAuth } from '../auth/useAuth'
 import { notificationsApi, type AppNotification } from '../api/notifications.api'
 import { BackgroundDecor } from './BackgroundDecor'
@@ -234,7 +234,7 @@ export default function AppShell() {
         setUnreadCount(0)
     }
 
-    const deleteNotification = async (event: MouseEvent<HTMLButtonElement>, notification: AppNotification) => {
+    const deleteNotification = async (event: ReactMouseEvent<HTMLButtonElement>, notification: AppNotification) => {
         event.stopPropagation()
 
         setNotifications((current) => current.filter((item) => item.id !== notification.id))

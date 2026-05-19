@@ -1,16 +1,14 @@
 package com.tasko.backend.task;
 
+import com.tasko.backend.exception.ForbiddenException;
+import com.tasko.backend.exception.NotFoundException;
 import com.tasko.backend.project.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -25,7 +23,7 @@ class TaskServiceTest {
     @Autowired ProjectMemberRepository memberRepository;
 
     private ProjectResponse createProject(Long ownerId) {
-        return projectService.create(ownerId, new ProjectCreateRequest("P", null, null));
+        return projectService.create(ownerId, new ProjectCreateRequest("P", null, null, null));
     }
 
     @Test
@@ -40,11 +38,11 @@ class TaskServiceTest {
                 .userId(studentId)
                 .role(ProjectRole.STUDENT)
                 .build());
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
-                () -> taskService.create(studentId, project.id(), new TaskCreateRequest("T", null, null, null))
+        ForbiddenException ex = assertThrows(
+                ForbiddenException.class,
+                () -> taskService.create(studentId, project.id(), new TaskCreateRequest("T", null, null, 100))
         );
-        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        assertEquals("Only OWNER can do this", ex.getMessage());
 
         TaskResponse created = taskService.create(ownerId, project.id(),
                 new TaskCreateRequest("  Title  ", "  desc  ", LocalDate.now().plusDays(1), 100));
@@ -61,11 +59,11 @@ class TaskServiceTest {
 
         ProjectResponse project = createProject(ownerId);
 
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
-                () -> taskService.list(outsiderId, project.id())
+        ForbiddenException ex = assertThrows(
+                ForbiddenException.class,
+                () -> taskService.list(outsiderId, project.id(), null, null)
         );
-        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        assertEquals("Not a project member", ex.getMessage());
     }
 
     @Test
@@ -73,11 +71,11 @@ class TaskServiceTest {
         Long ownerId = 1L;
         ProjectResponse project = createProject(ownerId);
 
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        NotFoundException ex = assertThrows(
+                NotFoundException.class,
                 () -> taskService.getById(ownerId, project.id(), 99999L)
         );
-        assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
+        assertEquals("Task not found", ex.getMessage());
     }
 
     @Test
@@ -94,13 +92,13 @@ class TaskServiceTest {
                 .build());
 
         TaskResponse task = taskService.create(ownerId, project.id(),
-                new TaskCreateRequest("T", null, null, null));
+                new TaskCreateRequest("T", null, null, 100));
 
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        ForbiddenException ex = assertThrows(
+                ForbiddenException.class,
                 () -> taskService.update(studentId, project.id(), task.id(), new TaskUpdateRequest("X", null, null, null))
         );
-        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        assertEquals("Only OWNER can do this", ex.getMessage());
     }
 
     @Test
@@ -109,7 +107,7 @@ class TaskServiceTest {
         ProjectResponse project = createProject(ownerId);
 
         TaskResponse task = taskService.create(ownerId, project.id(),
-                new TaskCreateRequest("T", null, null, null));
+                new TaskCreateRequest("T", null, null, 100));
 
         taskService.delete(ownerId, project.id(), task.id());
 
